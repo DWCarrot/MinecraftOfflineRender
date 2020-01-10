@@ -1,0 +1,796 @@
+use std::convert::TryInto;
+use std::rc::Rc;
+use std::collections::BTreeMap;
+use serde::{Deserialize, Serialize};
+use serde::de::{self, Deserializer, Visitor};
+use serde::ser::{self, Serializer};
+use super::resource::Provider;
+
+macro_rules! option_override {
+    ($t:ident,$s:ident,$($field:ident),+) => {
+        $(
+            if $t.$field.is_none() && $s.$field.is_some() {
+                $t.$field = $s.$field.clone();
+            }
+        )+
+    };
+}
+
+fn default_bool_true() -> bool { true }
+fn default_3f32_0() -> [f32; 3] { [0.0f32, 0.0, 0.0] }
+fn default_3f32_1() -> [f32; 3] { [1.0f32, 1.0, 1.0] }
+fn default_3f32_16() -> [f32;3] { [16.0, 16.0, 16.0] }
+
+type ErrI32 = i32;
+type RcProvider<T> = dyn Provider<Item=Rc<T>>;
+
+pub trait Merge {
+
+    fn merge(&mut self, other: &Self)  -> bool;
+}
+
+/**
+ * 
+ */
+pub struct Model<T> {
+
+    pub ambientocclusion: bool, //true
+
+    pub display: Option<Box<Display>>,
+
+    pub elements: Vec<Element<T>>,
+
+    pub textures: Option<BTreeMap<String, Rc<T>>>
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ModelRaw {
+
+    #[serde(default)]
+    parent: Option<String>,
+
+    #[serde(default = "default_bool_true")]
+    ambientocclusion: bool, //true
+
+    #[serde(default)]
+    display: Option<Box<DisplayRaw>>,
+
+    #[serde(default)]
+    elements: Vec<ElementRaw>,
+
+    #[serde(default)]
+    textures: Option<BTreeMap<String, String>>
+}
+
+impl Merge for ModelRaw {
+
+    fn merge(&mut self, other: &Self)  -> bool {
+        self.parent = other.parent.clone();
+        if let Some(s) = &mut self.display {
+            if let Some(o) = &other.display {
+                let s = s.as_mut();
+                let o = o.as_ref();
+                s.merge(o);
+            }
+        } else {
+            if other.display.is_some() {
+                self.display = other.display.clone();
+            }
+        }
+        if other.elements.len() > 0 {
+            self.elements.extend_from_slice(other.elements.as_slice());
+        }
+        if let Some(s) = &mut self.textures {
+            if let Some(o) = &other.textures {
+                for (k, v) in o {
+                    s.entry(k.clone()).or_insert_with(|| v.clone());
+                }
+            }
+        } else {
+            if other.display.is_some() {
+                self.display = other.display.clone();
+            }
+        }
+        true
+    }
+}
+
+pub struct IntoModel<'a, T>(ModelRaw, &'a mut RcProvider<T>);
+
+impl<'a, T> TryInto<Model<T>> for IntoModel<'a, T> {
+    type Error = i32;
+
+    fn try_into(self) -> Result<Model<T>, Self::Error> {
+        let r = self.0;
+        let p = self.1;
+        match r.parent {
+            Some(parent) => Err(19),
+            None => {
+                let ambientocclusion = r.ambientocclusion;
+                let display = match r.display {
+                    Some(v) => Some(Box::new(v.as_ref().clone().into())),
+                    None => None,
+                };
+                let elements = {
+                    let mut list = Vec::with_capacity(r.elements.len());
+                    for e in r.elements {
+                        let s = IntoElement(e, p).try_into()?;
+                        list.push(s);
+                    }
+                    list
+                };
+                let textures = if elements.is_empty() {
+                    let mut map = BTreeMap::new();
+                    for (k, v) in r.textures.ok_or_else(|| 93)? {
+                        let tex = p.provide(&v).ok_or_else(|| 92)?;
+                        map.insert(k, tex);
+                    }
+                    Some(map)
+                } else {
+                    None
+                };
+                Ok(Model {
+                    ambientocclusion,
+                    display,
+                    elements,
+                    textures
+                })
+            }
+        }
+    }
+}
+
+
+pub struct Display {
+
+    pub thirdperson_righthand: Transform, 
+    
+    pub thirdperson_lefthand: Transform, 
+    
+    pub firstperson_righthand: Transform, 
+    
+    pub firstperson_lefthand: Transform, 
+    
+    pub gui: Transform, 
+    
+    pub head: Transform, 
+    
+    pub ground: Transform, 
+    
+    pub fixed: Transform,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct DisplayRaw {
+
+    #[serde(default)]
+    pub thirdperson_righthand: Option<Transform>, 
+    
+    #[serde(default)]
+    pub thirdperson_lefthand: Option<Transform>, 
+    
+    #[serde(default)]
+    pub firstperson_righthand: Option<Transform>, 
+    
+    #[serde(default)]
+    pub firstperson_lefthand: Option<Transform>, 
+    
+    #[serde(default)]
+    pub gui: Option<Transform>, 
+    
+    #[serde(default)]
+    pub head: Option<Transform>, 
+    
+    #[serde(default)]
+    pub ground: Option<Transform>, 
+    
+    #[serde(default)]
+    pub fixed: Option<Transform>,
+}
+
+impl Merge for DisplayRaw {
+
+    fn merge(&mut self, other: &Self)  -> bool {
+        option_override!(self, other, thirdperson_righthand, thirdperson_lefthand, firstperson_lefthand, firstperson_righthand, gui, head, ground, fixed);
+        true
+    }
+}
+
+pub struct IntoDisplay<'a, T>(DisplayRaw, &'a mut RcProvider<T>);
+
+impl<'a, T> TryInto<Display> for IntoDisplay<'a, T> {
+    type Error = i32;
+
+    fn try_into(self) -> Result<Display, Self::Error> {
+        Ok( self.0.into() )
+    }
+}
+
+impl Into<Display> for DisplayRaw {
+    fn into(self) -> Display {
+        Display {
+            thirdperson_lefthand: self.thirdperson_lefthand.unwrap_or_default(),
+            thirdperson_righthand: self.thirdperson_righthand.unwrap_or_default(),
+            firstperson_lefthand: self.firstperson_lefthand.unwrap_or_default(),
+            firstperson_righthand: self.firstperson_righthand.unwrap_or_default(),
+            gui: self.gui.unwrap_or_default(),
+            head: self.head.unwrap_or_default(),
+            ground: self.ground.unwrap_or_default(),
+            fixed: self.fixed.unwrap_or_default()
+        }
+    }
+}
+
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Transform {
+
+    #[serde(default = "default_3f32_0")]
+    pub rotation: [f32; 3], // [0, 0, 0]
+
+    #[serde(default = "default_3f32_0")]
+    pub translation: [f32; 3], // [0, 0, 0]
+
+    #[serde(default = "default_3f32_1")]
+    pub scale: [f32; 3], // [1, 1, 1]
+}
+
+
+
+impl Default for Transform {
+    fn default() -> Self {
+        Transform {
+            rotation: default_3f32_0(),
+            translation: default_3f32_0(),
+            scale: default_3f32_1(),
+        }
+    }
+}
+
+pub struct Element<T> {
+
+    pub from: [f32; 3], // [0, 0, 0]
+
+    pub to: [f32; 3], // [16, 16, 16]
+
+    pub rotation: Rotation,
+
+    pub shade: bool, // true
+
+    pub faces: [Option<FaceTexture<T>>; 6],
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ElementRaw {
+
+    #[serde(default = "default_3f32_0")]
+    pub from: [f32; 3],
+
+    #[serde(default = "default_3f32_16")]
+    pub to: [f32; 3],
+
+    #[serde(default)]
+    pub rotation: Option<Rotation>,
+
+    #[serde(default = "default_bool_true")]
+    pub shade: bool, // true
+
+    pub faces: BTreeMap<Face, FaceTextureRaw>,
+}
+
+
+
+impl Merge for ElementRaw {
+
+    fn merge(&mut self, other: &Self)  -> bool {
+        use std::collections::btree_map::Entry;
+
+        option_override!(self, other, rotation);
+        for (k, v) in &other.faces {
+            match self.faces.entry(k.clone()) {
+                Entry::Occupied(entry) => {
+                    entry.into_mut().merge(v);
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(v.clone());
+                }
+            }
+        }
+        true
+    }
+}
+
+pub struct IntoElement<'a, T>(ElementRaw, &'a mut RcProvider<T>);
+
+impl<'a, T> TryInto<Element<T>> for IntoElement<'a, T> {
+    type Error = i32;
+
+    fn try_into(self) -> Result<Element<T>, Self::Error> {
+
+        let r = self.0;
+        let p = self.1;
+
+        let mut faces = [None, None, None, None, None, None];
+
+        for (k, mut v) in r.faces {
+            if v.cullface.is_none() {
+                v.cullface = Some(k.opposite());
+            }
+            let m = IntoFaceTexture(v, p);
+            let t = m.try_into()?;
+            faces[k as usize] = Some(t);
+        }
+
+        Ok( Element {
+            from: r.from,
+            to: r.to,
+            rotation: r.rotation.unwrap_or_default(),
+            shade: r.shade,
+            faces
+        })
+    }
+}
+
+// impl<T> BuildInto<Element<T>> for ElementRaw {
+//     type InUse = Rc<T>;
+//     type E = u32;
+
+//     fn into(self, provider: &mut dyn Provider<Item=Self::InUse>) -> Result<Element<T>, Self::E> {
+        
+//         let mut into_facetex = |this: FaceTextureRaw, f: &Face| -> Result<FaceTexture<T>, Self::E> {
+//             Ok(FaceTexture {
+//                 uv: this.uv.unwrap_or_else(|| [0.0, 0.0, 16.0 ,16.0]),
+//                 rotation: this.rotation.unwrap_or_else(|| 0.0),
+//                 texture: provider.provide(this.texture.as_str()).ok_or_else(|| 16 as u32)?,
+//                 cullface: this.cullface.unwrap_or_else(|| f.opposite()),
+//                 tintindex: this.tintindex
+//             })
+//         };
+
+//         let mut faces = [None, None, None, None, None, None];
+
+//         for (k, v) in self.faces {
+//             let t = into_facetex(v, &k)?;
+//             faces[k as usize] = Some(t);
+//         }
+
+//         Ok( Element {
+//             from: self.from.unwrap_or_else(|| [0.0, 0.0, 0.0]),
+//             to: self.to.unwrap_or_else(|| [16.0, 16.0, 16.0]),
+//             rotation: self.rotation.unwrap_or_default(),
+//             shade: self.shade,
+//             faces
+//         })
+//     }
+
+// }
+
+// fn deserialize_faces<'de, D>(deserializer: D) -> Result<[Option<FaceTexture>;6], D::Error> 
+// where 
+//     D: Deserializer<'de>,
+// {
+//     use std::fmt;
+
+//     struct InnerVisitor;
+
+//     impl<'de> Visitor<'de> for InnerVisitor {
+//         type Value = [Option<FaceTexture>; 6];
+
+//         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+//             formatter.write_str("{[down,up,north,south,west,east]:<FaceTexture>}")
+//         }
+
+//         fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+//         where
+//             V: MapAccess<'de>,
+//         {
+//             let mut res = [None, None, None, None, None, None];
+//             while let Some(v) = map.next_key::<Face>()? {
+//                 let index = v as usize;
+//                 if res[index].is_some() {
+//                     return Err(de::Error::duplicate_field(FIELDS[index]))
+//                 }
+//                 res[index] = Some(map.next_value()?);
+//             }
+//             Ok(res)
+//         }
+//     }
+
+//     const FIELDS: &'static [&'static str] = &["west","down","north","south","up","east"];
+//     deserializer.deserialize_struct("[Option<FaceTexture>; 6]", FIELDS, InnerVisitor)
+// }
+
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Rotation {
+
+    #[serde(default = "default_3f32_8")]
+    pub origin: [f32; 3],   // [8, 8, 8]
+
+    pub axis: Axis, // Y
+
+    #[serde(default)]
+    pub angle: f32, // 0
+
+    #[serde(default)]
+    pub rescale: bool,
+}
+
+fn default_3f32_8() -> [f32; 3] { [8.0f32, 8.0, 8.0] }
+
+impl Default for Rotation {
+    fn default() -> Self {
+        Rotation {
+            origin: default_3f32_8(),
+            axis: Axis::Y,
+            angle: Default::default(),
+            rescale: Default::default()
+        }
+    }
+}
+
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum Axis {
+    #[serde(rename = "x")]
+    X = 0,
+    #[serde(rename = "y")]
+    Y = 1,
+    #[serde(rename = "z")]
+    Z = 2
+}
+
+
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(PartialEq, PartialOrd, Eq, Ord)]
+pub enum Face {
+
+    #[serde(rename = "down")]
+    Down = 1, 
+
+    #[serde(rename = "up")]
+    Up = 4, 
+
+    #[serde(rename = "north")]
+    North = 2, 
+
+    #[serde(rename = "south")]
+    South = 3, 
+
+    #[serde(rename = "west")]
+    West = 0, 
+
+    #[serde(rename = "east")]
+    East = 5,
+
+}
+
+impl Face {
+    pub fn opposite(&self) -> Face {
+        match self {
+            Self::West => Self::East,
+            Self::Down => Self::Up,
+            Self::North => Self::South,
+            Self::South => Self::North,
+            Self::Up => Self::Down,
+            Self::East => Self::West,
+        }
+    }
+}
+
+
+pub struct FaceTexture<T> {
+
+    pub uv: [f32; 4], // [0, 0, 16, 16]
+
+    pub texture: Rc<T>,
+
+    pub cullface: Face, // Side
+
+    pub rotation: f32,  // 0
+
+    pub tintindex: Option<usize>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct FaceTextureRaw {
+
+    #[serde(default)]
+    pub uv: Option<[f32; 4]>, // [0, 0, 16, 16]
+
+    pub texture: String,
+
+    #[serde(default)]
+    pub cullface: Option<Face>, // Side
+
+    #[serde(default)]
+    pub rotation: Option<f32>,  // 0
+
+    #[serde(default)]
+    pub tintindex: Option<usize>,
+}
+
+impl Merge for FaceTextureRaw {
+    fn merge(&mut self, other: &Self)  -> bool {
+        option_override!(self, other, uv, cullface, tintindex, rotation);
+        true
+    }
+}
+
+pub struct IntoFaceTexture<'a, T>(FaceTextureRaw, &'a mut RcProvider<T>);
+
+impl<'a, T> TryInto<FaceTexture<T>> for IntoFaceTexture<'a, T> {
+    type Error = i32;
+
+    fn try_into(self) -> Result<FaceTexture<T>, Self::Error> {
+        let p = self.1;
+        let r = self.0;
+        Ok(FaceTexture {
+            uv: r.uv.unwrap_or_else(|| [0.0, 0.0, 16.0, 16.0]),
+            rotation: r.rotation.unwrap_or_default(),
+            cullface: r.cullface.ok_or_else(|| 9)?,
+            texture: p.provide(r.texture.as_str()).ok_or_else(|| 10)?,
+            tintindex: r.tintindex
+        })
+    }
+}
+
+impl ModelRaw {
+
+    pub fn integrate(&mut self, model_provider: &mut RcProvider<Self>) -> Result<&Self, i32> {
+         
+        while let Some(s) = &self.parent {
+            let parent = model_provider.provide(s).ok_or_else(|| 53)?;
+            self.merge(parent.as_ref());
+        }
+        
+        if let Some(textures) = self.textures.as_mut() {
+            for element in self.elements.as_mut_slice() {
+                for(face, tex) in &mut element.faces {
+                    if tex.cullface.is_none() {
+                        tex.cullface = Some(face.opposite())
+                    }
+                    let mut s = tex.texture.as_str();
+                    if s.starts_with('#') {
+                        loop {
+                            s = &s[1..];
+                            s = textures.get(s).ok_or_else(|| 54)?.as_str();
+                            if !s.starts_with('#') {
+                                break;
+                            }
+                        }
+                        tex.texture = s.to_string();
+                    }
+                }
+            }
+            if self.elements.len() > 0 {
+                self.textures = None;
+            }
+        }
+        Ok(self)
+        //IntoModel(self.clone(), texture_provider).try_into()       
+    }
+
+    // pub fn combine<'a>(models: &[super::blockstate::ModelRaw], model_provider: &mut RcProvider<Self>) -> Result<Self, i32> {
+        
+    //     let mut model = ModelRaw {
+    //         ambientocclusion: true,
+    //         display: None,
+    //         elements: Vec::new(),
+    //         parent: None,
+    //         textures: None
+    //     };
+
+    //     for t in models {
+    //         let m = model_provider.provide(t.model()).ok_or_else(|| 33)?;
+    //         if m.parent.is_some() {
+    //             return Err( 74 );
+    //         }
+    //         if m.textures.is_some() {
+    //             return Err( 75 );
+    //         }
+    //         if model.ambientocclusion && !m.ambientocclusion {
+    //             model.ambientocclusion = m.ambientocclusion;
+    //         }
+    //         if model.display.is_none() && m.display.is_some() {
+    //             model.display = m.display.clone();
+    //         }
+    //         for element in m.elements.as_slice() {
+    //             let mut element = element.clone();
+    //             match t.y() {
+    //                 Rotate90::R0 => { },
+    //                 _ => {
+    //                     if let Some(from) = &mut element.from {
+    //                         *from = transform(Axis::Y, t.y(), from);
+    //                     } else {
+    //                         element.from = Some(transform(Axis::Y, t.y(), &[0.0, 0.0, 0.0f32]));
+    //                     }
+    //                     if let Some(to) = &mut element.to {
+    //                         *to = transform(Axis::Y, t.y(), to);
+    //                     } else {
+    //                         element.to = Some(transform(Axis::Y, t.y(), &[16.0, 16.0, 16.0f32]));
+    //                     }
+    //                 }
+    //             }
+    //             match t.x() {
+    //                 Rotate90::R0 => { },
+    //                 _ => {
+    //                     if let Some(from) = &mut element.from {
+    //                         *from = transform(Axis::Y, t.x(), from);
+    //                     } else {
+    //                         element.from = Some(transform(Axis::Y, t.x(), &[0.0, 0.0, 0.0f32]));
+    //                     }
+    //                     if let Some(to) = &mut element.to {
+    //                         *to = transform(Axis::Y, t.x(), to);
+    //                     } else {
+    //                         element.to = Some(transform(Axis::Y, t.x(), &[16.0, 16.0, 16.0f32]));
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     Ok(model)
+    // }
+}
+
+
+
+
+
+
+/**
+ * 
+ */
+#[derive(Clone, Debug)]
+pub enum Rotate90 {
+    R0,
+    R90,
+    R180,
+    R270,
+}
+
+impl Default for Rotate90 {
+    
+    fn default() -> Self {
+        Rotate90::R0
+    }
+}
+
+impl<'de> Deserialize<'de> for Rotate90 {
+
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use std::fmt;
+
+        struct InnerVisitor;
+
+        impl<'de> Visitor<'de> for InnerVisitor {
+            type Value = Rotate90;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("number: 0, 90, 180, 270")
+            }
+
+            fn visit_u16<E>(self, value: u16) -> Result<Rotate90, E>
+            where
+                E: de::Error,
+            {
+                match value {
+                    0 => Ok(Rotate90::R0),
+                    90 => Ok(Rotate90::R90),
+                    180 => Ok(Rotate90::R180),
+                    270 => Ok(Rotate90::R270),
+                    _ => Err(de::Error::invalid_type(de::Unexpected::Unsigned(value as u64), &self))
+                }
+            }
+
+            fn visit_u32<E>(self, value: u32) -> Result<Rotate90, E>
+            where
+                E: de::Error,
+            {
+                match value {
+                    0 => Ok(Rotate90::R0),
+                    90 => Ok(Rotate90::R90),
+                    180 => Ok(Rotate90::R180),
+                    270 => Ok(Rotate90::R270),
+                    _ => Err(de::Error::invalid_type(de::Unexpected::Unsigned(value as u64), &self))
+                }
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Rotate90, E>
+            where
+                E: de::Error,
+            {
+                match value {
+                    0 => Ok(Rotate90::R0),
+                    90 => Ok(Rotate90::R90),
+                    180 => Ok(Rotate90::R180),
+                    270 => Ok(Rotate90::R270),
+                    _ => Err(de::Error::invalid_type(de::Unexpected::Unsigned(value as u64), &self))
+                }
+            }
+
+            fn visit_i16<E>(self, value: i16) -> Result<Rotate90, E>
+            where
+                E: de::Error,
+            {
+                match value {
+                    0 => Ok(Rotate90::R0),
+                    90 => Ok(Rotate90::R90),
+                    180 => Ok(Rotate90::R180),
+                    270 => Ok(Rotate90::R270),
+                    _ => Err(de::Error::invalid_type(de::Unexpected::Signed(value as i64), &self))
+                }
+            }
+
+            fn visit_i32<E>(self, value: i32) -> Result<Rotate90, E>
+            where
+                E: de::Error,
+            {
+                match value {
+                    0 => Ok(Rotate90::R0),
+                    90 => Ok(Rotate90::R90),
+                    180 => Ok(Rotate90::R180),
+                    270 => Ok(Rotate90::R270),
+                    _ => Err(de::Error::invalid_type(de::Unexpected::Signed(value as i64), &self))
+                }
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Rotate90, E>
+            where
+                E: de::Error,
+            {
+                match value {
+                    0 => Ok(Rotate90::R0),
+                    90 => Ok(Rotate90::R90),
+                    180 => Ok(Rotate90::R180),
+                    270 => Ok(Rotate90::R270),
+                    _ => Err(de::Error::invalid_type(de::Unexpected::Signed(value as i64), &self))
+                }
+            }
+        }
+        deserializer.deserialize_i32(InnerVisitor)
+    }
+}
+
+impl Serialize for Rotate90 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_i32(self.clone() as i32)
+    }
+}
+
+pub fn transform(axis: Axis, rotation: Rotate90, vec3: &[f32; 3]) -> [f32; 3] {
+    match rotation {
+        Rotate90::R0 => {
+            [vec3[0], vec3[1], vec3[2]]
+        }
+        Rotate90::R90 => {
+            match axis {
+                Axis::X => [vec3[0]         , 16.0 - vec3[2]    , vec3[1]           ],
+                Axis::Y => [vec3[2]         , vec3[1]           , 16.0 - vec3[0]    ],
+                Axis::Z => [16.0 - vec3[1]  , vec3[0]           , vec3[2]           ],
+            } 
+        }
+        Rotate90::R180 => {
+            match axis {
+                Axis::X => [vec3[0]         , 16.0 - vec3[1]    , 16.0 - vec3[2]    ],
+                Axis::Y => [16.0 - vec3[0]  , vec3[1]           , 16.0 - vec3[2]    ],
+                Axis::Z => [16.0 - vec3[0]  , 16.0 - vec3[1]    , vec3[2]           ],
+            } 
+        }
+        Rotate90::R270 => {
+            match axis {
+                Axis::X => [vec3[0]         , vec3[2]           , 16.0 - vec3[1]    ],
+                Axis::Y => [16.0 - vec3[2]  , vec3[1]           , vec3[0]           ],
+                Axis::Z => [vec3[1]         , 16.0 - vec3[0]    , vec3[2]           ],
+            } 
+        }
+    }
+}

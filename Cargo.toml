@@ -1,0 +1,5 @@
+[workspace]
+members = [
+	"voxelmap-offline-render",
+	"mc-render",
+]

@@ -1,0 +1,927 @@
+
+use std::rc::Rc;
+use rand;
+use serde::{Deserialize, Serialize};
+use serde::de::{self, Deserializer, Visitor, MapAccess, SeqAccess};
+use serde::ser::{self, Serializer, SerializeSeq, SerializeStruct};
+use super::model::{Rotate90};
+use super::primary_type::PrimaryType;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct AppliedModelRaw {
+
+    #[serde(default)]
+    x: Rotate90,
+    
+    #[serde(default)]
+    y: Rotate90,
+
+    model: String,
+
+    #[serde(default)]
+    uvlock: bool,
+
+    #[serde(default = "default_f32_1")]
+    weight: f32, 
+}
+
+fn default_f32_1() -> f32 { 1.0 }
+
+#[derive(Clone, Debug)]
+pub enum ApplyRaw {
+    Item(AppliedModelRaw),
+    Array(Vec<AppliedModelRaw>),
+}
+
+impl Serialize for ApplyRaw {
+
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            ApplyRaw::Item(m) => serializer.serialize_newtype_struct("AppliedModelRaw", m),
+            ApplyRaw::Array(l) => {
+                let mut seq = serializer.serialize_seq(Some(l.len()))?;
+                for element in l.as_slice() {
+                    seq.serialize_element(element)?;
+                }
+                seq.end()
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ApplyRaw {
+
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use std::fmt;
+
+        struct InnerVisitor;
+
+        impl<'de> Visitor<'de> for InnerVisitor {
+            type Value = ApplyRaw;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("{model, uvlock?, x?, y?, weight?}, [{...}]")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut x = None;
+                let mut y = None;
+                let mut model = None;
+                let mut uvlock = None;
+                let mut weight = None;
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "x" => x = map.next_value()?,
+                        "y" => y = map.next_value()?,
+                        "model" => model = Some(map.next_value()?),
+                        "uvlock" => uvlock = map.next_value()?,
+                        "weight" => weight = map.next_value()?,
+                        _ => { }
+                    }
+                }
+                Ok(ApplyRaw::Item(AppliedModelRaw {
+                    x: x.unwrap_or_default(),
+                    y: y.unwrap_or_default(),
+                    model: model.ok_or_else(||de::Error::missing_field("model"))?,
+                    uvlock: uvlock.unwrap_or_default(),
+                    weight: weight.unwrap_or_else(default_f32_1),
+                }))
+                
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut list: Vec<AppliedModelRaw> = Vec::with_capacity(seq.size_hint().unwrap_or(4));
+                while let Some(v) = seq.next_element()? {
+                    list.push(v);
+                }
+                Ok(ApplyRaw::Array(list))
+            }
+
+            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                ApplyRaw::deserialize(deserializer)
+            }
+        }
+        const FIELDS: &'static [&'static str] = &["x", "y", "uvlock", "model", "weight"];
+        deserializer.deserialize_any(InnerVisitor)
+    }
+}
+
+impl ApplyRaw {
+
+    pub fn get(&self) -> &AppliedModelRaw {
+        match self {
+            Self::Item(p) => p,
+            Self::Array(list) => {
+                let x = rand::random::<f32>();
+                let mut p = 0.0;
+                for t in list {
+                    p += t.weight;
+                    if x < p {
+                        return &t;
+                    }
+                }
+                &list[list.len()-1]
+            },
+        }
+    }
+
+    pub fn get_fast(&self) -> &AppliedModelRaw {
+        match self {
+            Self::Item(p) => p,
+            Self::Array(list) => &list[0],
+        }
+    }
+
+}
+
+#[derive(Clone, Debug)]
+pub struct VariantsRaw(Expression<String, ApplyRaw, usize>);
+
+impl<'de> Deserialize<'de> for VariantsRaw {
+
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use std::fmt;
+
+        struct InnerVisitor;
+
+        impl<'de> Visitor<'de> for InnerVisitor {
+            type Value = VariantsRaw;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("{ [condition, ,]: ApplyRaw }")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut expr = Expression::default();
+                while let Some(s) = map.next_key::<String>()? {
+                    let key: &str = s.as_str();
+                    let v = map.next_value()?;
+                    if key == "" {
+                        expr.insert_value_unchecked(0, v);
+                    } else {
+                        let mut m = expr.get_initial_link();
+                        for part in key.split(',') {
+                            expr.insert_key(&part.to_string(), &mut m).ok_or_else(|| de::Error::invalid_length(64, &self))?;
+                        }
+                        
+                        if let Some(v) = expr.insert_value_unchecked(m, v) {
+                            return Err(de::Error::duplicate_field("[condition]"));
+                        }
+                    }
+                }
+                Ok(VariantsRaw(expr))
+            }
+        }
+        
+        deserializer.deserialize_map(InnerVisitor)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MuitiPartRaw(Expression<String, Vec<ApplyRaw>, usize>);
+
+
+impl<'de> Deserialize<'de> for MuitiPartRaw {
+
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use std::fmt;
+        use std::collections::btree_map::BTreeMap;
+
+        enum Case {
+            OR(Vec<BTreeMap<String, PrimaryType>>),
+            AND(BTreeMap<String, PrimaryType>),
+        }
+
+        impl<'de> Deserialize<'de> for Case {
+
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                struct InnerVisitorCase;
+
+                impl<'de> Visitor<'de> for InnerVisitorCase {
+                    type Value = Case;
+        
+                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                        formatter.write_str("{[k:string]:string} or OR:[{...}]")
+                    }
+
+                    fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+                    where
+                        V: MapAccess<'de>,
+                    {
+                        let mut case = BTreeMap::new();
+                        while let Some(key) = map.next_key()? {
+                            if key == "OR" {
+                                if case.len() > 0 {
+                                    return Err(de::Error::duplicate_field("OR"));
+                                }
+                                let multi = map.next_value()?;
+                                return Ok(Case::OR(multi));
+                            }
+                            let value = map.next_value()?;
+                            case.insert(key, value);
+                        }
+                        Ok(Case::AND(case))
+                    }
+                }
+
+                deserializer.deserialize_map(InnerVisitorCase)
+            }
+            
+        }
+
+        #[derive(Deserialize)]
+        struct CaseTuple {
+            when: Option<Case>,
+            apply: ApplyRaw
+        }
+
+        struct InnerVisitor;
+
+        impl<'de> Visitor<'de> for InnerVisitor {
+            type Value = MuitiPartRaw;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("[{when: {}, apply: <ApplyRaw>} ]")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut expr: Expression<String, Vec<ApplyRaw>, usize> = Expression::default();
+                let mut all: Vec<ApplyRaw> = Vec::new();
+
+                let mut insert_case = |pair: BTreeMap<String, PrimaryType>, value: ApplyRaw | -> Result<usize, A::Error> {
+                    let mut keys: Vec<usize> = Vec::new();
+                    let mut tmp = expr.get_initial_link();
+                    keys.push(tmp);
+                    for (pk, pv) in pair {
+                        let pv: String = pv.into();
+                        if pv.contains('|') {
+                            let len = keys.len();
+                            let cp = keys.clone();
+                            let mut start = 0 as usize;
+                            for s in pv.split('|') {
+                                let k = pk.clone() + "=" + s;
+                                let n = expr.insert_key(&k, &mut tmp).ok_or_else(|| de::Error::invalid_length(64, &self))?;
+                                if start + len > keys.len() {
+                                    keys.extend_from_slice(cp.as_slice());
+                                }
+                                for m in &mut keys[start..start+len] { *m |= n; }
+                                start += len; 
+                            }
+                        } else {
+                            let k = pk + "=" + &pv;
+                            let n = expr.insert_key(&k, &mut tmp).ok_or_else(|| de::Error::invalid_length(64, &self))?;
+                            for m in keys.iter_mut() { *m |= n; }
+                        }
+                    }
+                    let len = keys.len();
+                    for m in keys.into_iter() {
+                        expr.get_unchecked_default(m).push(value.clone());
+                    }
+                    Ok(len)
+                };
+
+                while let Some(t) = seq.next_element::<CaseTuple>()? {
+                    if let Some(case) = t.when {
+                        match case {
+                            Case::AND(pair) => {
+                                insert_case(pair, t.apply.clone())?;
+                            }
+                            Case::OR(list) => {
+                                for pair in list.into_iter() {
+                                    insert_case(pair, t.apply.clone())?;
+                                }
+                            }
+                        }
+                    } else {
+                        all.push(t.apply);
+                    }
+                }
+                if all.len() > 0 {
+                    for (k, v) in &mut expr.values {
+                        v.extend_from_slice(all.as_slice());
+                    }
+                    expr.insert_value_unchecked(0, all);
+                };
+                Ok(MuitiPartRaw(expr))
+            }
+        }
+        
+        deserializer.deserialize_seq(InnerVisitor)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum BlockStateRaw {
+    Variants(VariantsRaw),
+    MuitiPart(MuitiPartRaw),
+}
+
+impl Serialize for BlockStateRaw {
+
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            BlockStateRaw::Variants(v) => {
+                let mut s = serializer.serialize_struct("variant", 1)?;
+                s.serialize_field("map", &v.0)?;
+                s.end()
+            }
+            BlockStateRaw::MuitiPart(m) => {
+                let mut s = serializer.serialize_struct("muiltipart", 1)?;
+                s.serialize_field("map", &m.0)?;
+                s.end()
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for BlockStateRaw {
+
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use std::fmt;
+
+        struct InnerVisitor;
+
+        impl<'de> Visitor<'de> for InnerVisitor {
+            type Value = BlockStateRaw;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str(" multipart: {...} or variants: {...}")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                if let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "variants" => Ok(Self::Value::Variants(map.next_value()?)),
+                        "multipart" => Ok(Self::Value::MuitiPart(map.next_value()?)),
+                        _ => Err(de::Error::unknown_field(key.as_str(), FIELDS))
+                    }
+                } else {
+                    Err(de::Error::missing_field(""))
+                }
+            }
+        }
+
+        const FIELDS: &'static [&'static str] = &["variants", "multipart"];
+        deserializer.deserialize_map(InnerVisitor)
+    }
+}
+
+
+
+
+/**
+ * 
+ */
+use std::collections::btree_map::BTreeMap as Map;
+
+#[derive(Clone, Debug)]
+pub struct Expression<K, V, M> {
+
+    keys: Map<K, M>,
+
+    values: Map<M, V>,
+
+    mask: M,
+}
+
+impl<K: std::cmp::Ord, V> Default for Expression<K, V, usize> {
+
+    fn default() -> Self {
+        Expression {
+            keys: Map::default(),
+            values: Map::default(),
+            mask: 0,
+        }
+    }
+}
+
+impl<K: std::cmp::Ord + Clone, V> Expression<K, V, usize> {
+
+    pub fn insert<'a, I:Iterator<Item=&'a K>>(&'a mut self, key: I, value: V) -> Option<usize> {
+        let mut m = self.get_initial_link();
+        for k in key {
+            self.insert_key(k, &mut m)?;
+        }
+        self.values.insert(m, value);
+        Some(m)
+    }
+
+    pub fn insert_key(&mut self, k: &K, m: &mut usize) -> Option<usize> {
+        if let Some(n) = self.keys.get(k) {
+            *m |= *n;
+            Some(*n)
+        } else {
+            if self.mask == std::usize::MAX {
+                return None;
+            }
+            let n = self.mask + 1;
+            self.mask = n | self.mask;
+            self.keys.insert(k.clone(), n);
+            *m |= n;
+            Some(n)
+        }
+    }
+
+    pub fn insert_value_unchecked(&mut self, m: usize, v: V) -> Option<V> {
+        self.values.insert(m, v)
+    }
+}
+
+impl<K: std::cmp::Ord, V> Expression<K, V, usize> {
+
+    pub fn get_initial_link(&self) -> usize {
+        0
+    }
+
+    pub fn size(&self) -> (usize, usize) {
+        (self.keys.len(), self.values.len())
+    }
+
+    pub fn get<'a, I:Iterator<Item=&'a K>>(&'a self, key: I, strict: bool) -> Option<&'a V> {
+        let mut m = 0;
+        let keys = &self.keys;
+        for k in key {
+            match keys.get(k) {
+                Some(n) => {
+                    m |= n;
+                },
+                None => {
+                    if strict { return None; }
+                }
+            }
+        }
+        self.values.get(&m)
+    }
+
+    pub fn get_mut<'a, I:Iterator<Item=&'a K>>(&'a mut self, key: I, strict: bool) -> Option<&'a mut V> {
+        let mut m = 0;
+        let keys = &self.keys;
+        for k in key {
+            match keys.get(k) {
+                Some(n) => {
+                    m |= n;
+                },
+                None => {
+                    if strict { return None; }
+                }
+            }
+        }
+        self.values.get_mut(&m)
+    }
+
+    pub fn transf_values<V2, F: FnMut(V)->V2>(self, mut f: F) -> Expression<K, V2, usize> {
+        let mut values = Map::new();
+        for (m, v) in self.values {
+            let v2 = f(v);
+            values.insert(m, v2);
+        }
+        Expression {
+            keys: self.keys,
+            values,
+            mask: self.mask
+        }
+    }
+}
+
+impl<K: std::cmp::Ord, V: Default> Expression<K, V, usize> {
+
+    pub fn get_unchecked_default(&mut self, m: usize) -> &mut V {
+        self.values.entry(m).or_insert_with(V::default)
+    }
+}
+
+
+impl Serialize for Expression<String, ApplyRaw, usize> {
+
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut rgb = serializer.serialize_struct("map", 3)?;
+        rgb.serialize_field("keys", &self.keys)?;
+        rgb.serialize_field("values", &self.values)?;
+        rgb.serialize_field("size", &self.size())?;
+        rgb.end()
+    }
+}
+
+impl Serialize for Expression<String, Vec<ApplyRaw>, usize> {
+
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut rgb = serializer.serialize_struct("map", 3)?;
+        rgb.serialize_field("keys", &self.keys)?;
+        rgb.serialize_field("values", &self.values)?;
+        rgb.serialize_field("size", &self.size())?;
+        rgb.end()
+    }
+}
+
+// pub enum BlockState {
+//     All(Rc<BlockModel>),
+//     Variant(Expression<String, Rc<BlockModel>, usize>),
+//     MultiPart(Expression<String, Rc<BlockModel>, usize>),
+// }
+
+// impl BlockState {
+
+//     pub fn get(&self, key: &[String]) -> Option<&BlockModel> {
+//         match self {
+//             BlockState::All(m) => {
+//                 Some(m)
+//             },
+//             BlockState::Variant(e) => match e.get(key, false) { 
+//                 Some(p) => Some(p),
+//                 None => None 
+//             },
+//             BlockState::MultiPart(e) => match e.get(key, false) { 
+//                 Some(p) => Some(p), 
+//                 None => None 
+//             }
+//         }
+//     }
+
+//     pub fn get_strict(&self, key: &[String]) -> Option<&BlockModel> {
+//         match self {
+//             BlockState::All(m) => {
+//                 if key.len() == 0 {
+//                     Some(m)
+//                 } else {
+//                     None
+//                 }
+//             },
+//             BlockState::Variant(e) => match e.get(key, true) { 
+//                 Some(p) => Some(p), 
+//                 None => None 
+//             },
+//             BlockState::MultiPart(e) => match e.get(key, true) { 
+//                 Some(p) => Some(p), 
+//                 None => None 
+//             }
+//         }
+//     }
+
+//     // pub fn from_json(json: &Value, rsc: &mut dyn Provider<Item=Model>) -> Result<Self, ParseError> {
+//     //     match json {
+//     //         Value::Object(obj) => {
+//     //             for (k, v) in obj {
+//     //                 if k == "variant" {
+
+//     //                 }
+//     //                 if k == "multipart" {
+
+//     //                 }
+//     //                 return Err(ParseError::new(format!("invalid `{}`", k), json.clone()));
+//     //             }
+//     //             Ok(BlockState::All(Rc::new(BlockModel::Single(rsc.provide("hello"))))) // TODO
+//     //         },
+//     //         _ => return Err(ParseError::new("json is not object".to_string(), json.clone()))
+//     //     }
+//     // }
+// }
+
+// #[derive(Deserialize)]
+// pub struct BlockModelR {
+
+//     #[serde(default)]
+//     pub x: Rotate90,
+    
+//     #[serde(default)]
+//     pub y: Rotate90,
+
+//     pub model: String,
+
+//     #[serde(default)]
+//     pub uvlock: bool,
+
+// }
+
+// /**
+//  * 
+//  */
+// pub enum BlockModel {
+//     Single(BlockModelR),
+//     Multi(Vec<(f32, BlockModelR)>),
+// }
+
+
+
+
+
+
+
+// impl<'de> Deserialize<'de> for BlockModel {
+
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: Deserializer<'de>,
+//     {
+//         use std::fmt;
+
+//         #[derive(Deserialize)]
+//         struct TupleBlockModelR {
+//             #[serde(default)]
+//             x: Rotate90,
+
+//             #[serde(default)]
+//             y: Rotate90,
+
+//             model: String,
+
+//             #[serde(default)]
+//             uvlock: bool,
+
+//             #[serde(default)]
+//             weight: f32,
+//         }
+
+//         impl Into<(f32, BlockModelR)> for TupleBlockModelR {
+
+//             fn into(self) -> (f32, BlockModelR) {
+//                 (
+//                     self.weight, 
+//                     BlockModelR {
+//                         x: self.x,
+//                         y: self.y,
+//                         model: self.models,
+//                         uvlock: self.uvlock
+//                     }
+//                 )
+//             }
+//         }
+
+//         struct InnerVisitor;
+
+//         impl<'de> Visitor<'de> for InnerVisitor {
+//             type Value = BlockModel;
+
+//             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+//                 formatter.write_str("[{...}] or {model:<string>, x?:0,90,180,270 ,y?:0,90,180,270}")
+//             }
+
+//             fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
+//             where
+//                 V: SeqAccess<'de>,
+//             {
+//                 let mut vec: Vec<(f32, BlockModelR)> = Vec::with_capacity(seq.size_hint().unwrap_or(4));
+//                 while let Some(v) = seq.next_element::<TupleBlockModelR>()? {
+//                     vec.push(v.into())
+//                 }
+//                 if vec.len() == 0 {
+//                     return Err(de::Error::invalid_length(0, &self))
+//                 }
+//                 let mut t = 0.0;
+//                 for v in vec.as_slice() {
+//                     t += v.0;
+//                 }
+//                 for v in vec.as_mut_slice() {
+//                     v.0 /= t;
+//                 }
+//                 Ok(BlockModel::Multi(vec))
+//             }
+            
+//             fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+//             where
+//                 D: Deserializer<'de>,
+//             {
+//                 BlockModelR::deserialize(deserializer).map(|v| BlockModel::Single(v))
+//             }
+//         }
+
+//         deserializer.deserialize_identifier(InnerVisitor)
+//     }
+// }
+
+
+
+
+
+/**
+ * 
+ */
+pub mod simple_list {
+
+    use std::ptr::NonNull;
+
+    pub unsafe fn unwrap_ptr<P>(b: Box<P>) -> NonNull<P> {
+        let p = Box::into_raw(b);
+        //println!("allocate node {}", p as usize);
+        NonNull::new_unchecked(p)
+    }
+
+    pub unsafe fn wrap_ptr<P>(ptr: NonNull<P>) -> Box<P> {
+        Box::from_raw(ptr.as_ptr())
+    }
+
+    pub struct ListNode<T> {
+        value: T,
+        next: Option<NonNull<ListNode<T>>>
+    }
+
+    impl<T> ListNode<T> {
+
+        pub fn new(value: T) -> NonNull<Self> {
+            let b = Box::new(ListNode {
+                value,
+                next: None
+            });
+            unsafe { unwrap_ptr(b) }
+        }
+
+        pub fn new_with(value: T, next: Option<NonNull<Self>>) -> NonNull<Self> {
+            let b = Box::new(ListNode {
+                value,
+                next
+            });
+            unsafe { unwrap_ptr(b) }
+        }
+
+        pub fn insert_after(&mut self, value: T) -> NonNull<Self> {
+            let b = Box::new(ListNode {
+                value,
+                next: self.next
+            });
+            let next = unsafe { unwrap_ptr(b) };
+            self.next = Some(next);
+            next
+        }
+
+        pub fn remove_after(&mut self) -> Option<Box<Self>> {
+            if let Some(next) = self.next {
+                let mut next = unsafe { wrap_ptr(next) };
+                self.next = next.next;
+                next.next = None;
+                Some(next)
+            } else {
+                None
+            }
+        }
+
+        
+
+    }
+
+    impl<T> Drop for ListNode<T> {
+
+        fn drop(&mut self) {
+            let mut p = self.next;
+            while let Some(next) = p {
+                let mut next = unsafe { wrap_ptr(next) };
+                p = next.next;
+                next.next = None;
+                std::mem::drop(next);
+            }
+            //println!("dropped  node {}", (self as *const Self) as usize);
+        }
+    }
+
+
+    pub struct ListNodeHeadNotNull<T> {
+
+        pointer: NonNull<ListNode<T>>,
+    }
+
+    impl<T> ListNodeHeadNotNull<T> {
+
+        pub fn new_with_value(value: T) -> Self {
+            ListNodeHeadNotNull {
+                pointer: ListNode::new(value)
+            }
+        }
+
+        pub fn push(&mut self, value: T) -> &ListNode<T> {
+            self.pointer = ListNode::new_with(value, Some(self.pointer));
+            unsafe { self.pointer.as_ref() }
+        }
+    }
+
+    impl<T> Drop for ListNodeHeadNotNull<T> {
+
+        fn drop(&mut self) {
+            let next = self.pointer;
+            let mut next = unsafe { wrap_ptr(next) };
+            let mut p = next.next;
+            next.next = None;
+            std::mem::drop(next);
+            while let Some(next) = p {
+                let mut next = unsafe { wrap_ptr(next) };
+                p = next.next;
+                next.next = None;
+                std::mem::drop(next);
+            }
+        }
+    }
+
+
+    pub struct ListNodeIter<'a, T> {
+
+        pointer: Option<&'a ListNode<T>>,
+    }
+
+    impl<'a, T> From<&'a ListNode<T>> for ListNodeIter<'a, T> {
+
+        fn from(head: &'a ListNode<T>) -> Self {
+            ListNodeIter {
+                pointer: Some(head)
+            }
+        }
+    }
+
+    impl<'a, T> From<&'a ListNodeHeadNotNull<T>> for ListNodeIter<'a, T> {
+
+        fn from(head: &'a ListNodeHeadNotNull<T>) -> Self {
+            ListNodeIter {
+                pointer: Some( unsafe { head.pointer.as_ref() })
+            }
+        }
+    }
+
+    impl<'a, T> Iterator for ListNodeIter<'a, T> {
+        type Item = &'a T;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            match self.pointer {
+                Some(pointer) => {
+                    let p = &pointer.value;
+                    self.pointer = match &pointer.next {
+                        Some(next) => unsafe { Some(next.as_ref()) },
+                        None => None
+                    };
+                    Some(p)
+                }
+                None => None
+            }
+        }
+    }
+}
+
+
+
+use std::ptr::NonNull;
+
+struct OrderedPair<K, V>(Vec<(NonNull<K>, NonNull<V>)>);
+
+impl<K, V> Serialize for OrderedPair<K, V> 
+where 
+    K: Serialize,
+    V: Serialize
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    { 
+        let list = &self.0;
+        let mut s = serializer.serialize_map(Some(list.len()))?;
+        for e in list.iter() {
+            s.serialize_key( unsafe { e.0.as_ref() } )?;
+            s.serialize_value( unsafe { e.1.as_ref() })?;
+        }
+        s.end()
+    }
+}
+
+impl<K: Ord, V> OrderedPair<K, V> {
+    
+    
+}

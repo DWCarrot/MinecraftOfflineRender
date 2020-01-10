@@ -1,0 +1,30 @@
+
+pub struct Texture<T> {
+
+    name: String,
+
+    inner: T
+  
+}
+
+impl<T: Sized> Texture<T> {
+
+    pub fn new(name: String, inner: T) -> Self {
+        Self {
+            name,
+            inner
+        }
+    }
+
+    pub fn get_inner(&self) -> &T {
+        &self.inner
+    }
+
+    pub fn get_inner_mut(&mut self) -> &mut T {
+        &mut self.inner
+    }
+
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
+}
