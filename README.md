@@ -10,7 +10,7 @@ Minecraft voxelmap offline render in Rust, render `cache/<x,z>.zip` into picture
   + mc-render    *render backend*
     + assets *minecraft assets loader*
     + model  *model data for minecraft block*
-    + render *screen-off vulkan render*
+    + render *screen-off opengl render*
     + ~~chunck *minecraft chunck loader*~~
   + voxelmap-offline-render   *voxelmap render frontend*
     + voxelcache  *voxelmap cache loader*
@@ -23,9 +23,9 @@ Minecraft voxelmap offline render in Rust, render `cache/<x,z>.zip` into picture
 
 + /
   + mc-render    *render backend*  [60%]
-    + assets:  90% done
-    + model:  90% done
-    + render:  20% done
+    + assets:  99% done
+    + model:  95% done
+    + render:  90% done
   + voxelmap-offline-render   *voxelmap render frontend*
     + 0% done
 

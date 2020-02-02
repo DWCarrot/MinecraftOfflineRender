@@ -11,11 +11,9 @@ use serde::ser::Serializer;
 use serde::ser::SerializeSeq;
 use serde::ser::SerializeStruct;
 use super::primary_type::PrimaryType;
-//use super::util::Provider;
-use super::math::Rotate90;
-use super::math::Face;
-use super::math::Axis;
-use super::math::Expression;
+use super::data_type::Rotate90;
+use super::data_type::Face;
+use super::data_type::Axis;
 
 
 /**
@@ -299,7 +297,7 @@ pub struct FaceTextureRaw {
     pub cullface: Option<Face>, // Side
 
     #[serde(default)]
-    pub rotation: Option<Rotate90>,  // 0
+    pub rotation: Option<Rotate90>,  // clockwise
 
     #[serde(default)]
     pub tintindex: Option<usize>,
@@ -320,10 +318,10 @@ impl Merge for FaceTextureRaw {
 pub struct AppliedModelRaw {
 
     #[serde(default)]
-    pub x: Rotate90,
+    pub x: Rotate90,    // inv-clockwise(right hand)
     
     #[serde(default)]
-    pub y: Rotate90,
+    pub y: Rotate90,    // clockwise
 
     pub model: String,
 
@@ -464,7 +462,16 @@ impl ApplyRaw {
  * 
  */
 #[derive(Clone, Debug)]
-pub struct VariantsRaw(pub Expression<String, ApplyRaw, usize>);
+pub struct VariantsRaw(Vec<(Vec<String>, ApplyRaw)>);
+
+impl IntoIterator for VariantsRaw {
+    type Item = (Vec<String>, ApplyRaw);
+    type IntoIter = std::vec::IntoIter<(Vec<String>, ApplyRaw)>;
+
+    fn into_iter(self) -> std::vec::IntoIter<(Vec<String>, ApplyRaw)> {
+        self.0.into_iter()
+    }
+}
 
 impl<'de> Deserialize<'de> for VariantsRaw {
 
@@ -487,24 +494,18 @@ impl<'de> Deserialize<'de> for VariantsRaw {
             where
                 V: MapAccess<'de>,
             {
-                let mut expr = Expression::default();
+                let mut list = Vec::new();
                 while let Some(s) = map.next_key::<String>()? {
                     let key: &str = s.as_str();
                     let v = map.next_value()?;
-                    if key == "" {
-                        expr.insert_value_unchecked(0, v);
+                    let k = if key == "" {
+                        Vec::new()
                     } else {
-                        let mut m = expr.get_initial_link();
-                        for part in key.split(',') {
-                            expr.insert_key(&part.to_string(), &mut m).ok_or_else(|| de::Error::invalid_length(64, &self))?;
-                        }
-                        
-                        if let Some(v) = expr.insert_value_unchecked(m, v) {
-                            return Err(de::Error::duplicate_field("[condition]"));
-                        }
-                    }
+                        key.split(',').map(|s| s.to_string()).collect()
+                    };
+                    list.push((k, v));
                 }
-                Ok(VariantsRaw(expr))
+                Ok(VariantsRaw(list))
             }
         }
         
@@ -518,10 +519,100 @@ impl<'de> Deserialize<'de> for VariantsRaw {
  * 
  */
 #[derive(Clone, Debug)]
-pub struct MuitiPartRaw(pub Expression<String, Vec<ApplyRaw>, usize>);
+pub struct MultiPartRaw(Vec<(CaseNode<Vec<CaseNode<String>>>, ApplyRaw)>);
+
+impl IntoIterator for MultiPartRaw {
+    type Item = (CaseNode<Vec<CaseNode<String>>>, ApplyRaw);
+    type IntoIter = std::vec::IntoIter<(CaseNode<Vec<CaseNode<String>>>, ApplyRaw)>;
+
+    fn into_iter(self) -> std::vec::IntoIter<(CaseNode<Vec<CaseNode<String>>>, ApplyRaw)> {
+        self.0.into_iter()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum CaseNode<T> {
+    Item(T),
+    Array(Vec<T>, usize)
+}
+
+impl<T> CaseNode<Vec<CaseNode<T>>> {
+
+    pub fn update_iter(&mut self) -> bool {
+        match self {
+            CaseNode::Item(v) => {
+                CaseNode::update_list(v.as_mut_slice())
+            }
+            CaseNode::Array(list, index) => {
+                if !CaseNode::update_list(list[*index].as_mut_slice()) {
+                    *index += 1;
+                    if *index < list.len() {
+                        true
+                    } else {
+                        *index = 0;
+                        false
+                    }
+                } else {
+                    true
+                }
+            }
+        }
+    }
+
+    pub fn line_iter<'a>(&'a self) -> CaseItemRefIter<'a, T> {
+        match self {
+            CaseNode::Item(v) => {
+                CaseItemRefIter{ inner: v.iter() }
+            }
+            CaseNode::Array(list, index) => {
+                let v = &list[*index];
+                CaseItemRefIter{ inner: v.iter() }
+            }
+        }
+    }
+
+    fn update_list(list: &mut [CaseNode<T>]) -> bool {
+        let mut success = false;
+        for node in list {
+            match node {
+                CaseNode::Item(_) => { },
+                CaseNode::Array(list, index) => {
+                    *index += 1;
+                    if *index < list.len() {
+                        success = true;
+                        break;
+                    } else {
+                        *index = 0;
+                    }
+                }
+            }
+        }
+        success
+    }
+}
 
 
-impl<'de> Deserialize<'de> for MuitiPartRaw {
+
+pub struct CaseItemRefIter<'a, T> {
+    inner: std::slice::Iter<'a, CaseNode<T>>,
+}
+
+impl<'a, T> Iterator for CaseItemRefIter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(node) = self.inner.next() {
+            match node {
+                CaseNode::Item(v) => Some(v),
+                CaseNode::Array(list, index) => list.get(*index)
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for MultiPartRaw {
 
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -584,7 +675,7 @@ impl<'de> Deserialize<'de> for MuitiPartRaw {
         struct InnerVisitor;
 
         impl<'de> Visitor<'de> for InnerVisitor {
-            type Value = MuitiPartRaw;
+            type Value = MultiPartRaw;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("[{when: {}, apply: <ApplyRaw>} ]")
@@ -594,64 +685,46 @@ impl<'de> Deserialize<'de> for MuitiPartRaw {
             where
                 A: SeqAccess<'de>,
             {
-                let mut expr: Expression<String, Vec<ApplyRaw>, usize> = Expression::default();
-                let mut all: Vec<ApplyRaw> = Vec::new();
-
-                let mut insert_case = |pair: BTreeMap<String, PrimaryType>, value: ApplyRaw | -> Result<usize, A::Error> {
-                    let mut keys: Vec<usize> = Vec::new();
-                    let mut tmp = expr.get_initial_link();
-                    keys.push(tmp);
+                
+                let insert_case = |pair: BTreeMap<String, PrimaryType> | -> Result<Vec<CaseNode<String>>, A::Error> {
+                    let mut r = Vec::new();
                     for (pk, pv) in pair {
                         let pv: String = pv.into();
-                        if pv.contains('|') {
-                            let len = keys.len();
-                            let cp = keys.clone();
-                            let mut start = 0 as usize;
+                        let node = if pv.contains('|') {
+                            let mut ks = Vec::new();
                             for s in pv.split('|') {
                                 let k = pk.clone() + "=" + s;
-                                let n = expr.insert_key(&k, &mut tmp).ok_or_else(|| de::Error::invalid_length(64, &self))?;
-                                if start + len > keys.len() {
-                                    keys.extend_from_slice(cp.as_slice());
-                                }
-                                for m in &mut keys[start..start+len] { *m |= n; }
-                                start += len; 
+                                ks.push(k);
                             }
+                            CaseNode::Array(ks, 0)
                         } else {
-                            let k = pk + "=" + &pv;
-                            let n = expr.insert_key(&k, &mut tmp).ok_or_else(|| de::Error::invalid_length(64, &self))?;
-                            for m in keys.iter_mut() { *m |= n; }
-                        }
+                            CaseNode::Item(pk + "=" + pv.as_str())
+                        };
+                        r.push(node);
                     }
-                    let len = keys.len();
-                    for m in keys.into_iter() {
-                        expr.get_unchecked_default(m).push(value.clone());
-                    }
-                    Ok(len)
+                    Ok(r)
                 };
 
+                let mut list = Vec::new();
                 while let Some(t) = seq.next_element::<CaseTuple>()? {
                     if let Some(case) = t.when {
                         match case {
                             Case::AND(pair) => {
-                                insert_case(pair, t.apply.clone())?;
+                                list.push((CaseNode::Item(insert_case(pair)?), t.apply))
                             }
-                            Case::OR(list) => {
-                                for pair in list.into_iter() {
-                                    insert_case(pair, t.apply.clone())?;
+                            Case::OR(or_list) => {
+                                let mut r = Vec::new();
+                                for pair in or_list.into_iter() {
+                                    r.push(insert_case(pair)?);
                                 }
+                                list.push((CaseNode::Array(r, 0), t.apply))
                             }
                         }
                     } else {
-                        all.push(t.apply);
+                        list.push((CaseNode::Item(Vec::new()), t.apply))
                     }
                 }
-                if all.len() > 0 {
-                    for v in expr.all_mut() {
-                        v.extend_from_slice(all.as_slice());
-                    }
-                    expr.insert_value_unchecked(0, all);
-                };
-                Ok(MuitiPartRaw(expr))
+                Ok(MultiPartRaw(list))
             }
         }
         
@@ -667,7 +740,7 @@ impl<'de> Deserialize<'de> for MuitiPartRaw {
 #[derive(Clone, Debug)]
 pub enum BlockStateRaw {
     Variants(VariantsRaw),
-    MuitiPart(MuitiPartRaw),
+    MultiPart(MultiPartRaw),
 }
 
 impl Serialize for BlockStateRaw {
@@ -678,13 +751,18 @@ impl Serialize for BlockStateRaw {
     {
         match self {
             BlockStateRaw::Variants(v) => {
-                let mut s = serializer.serialize_struct("variant", 1)?;
-                s.serialize_field("map", &v.0)?;
+                let list = &v.0;
+                let mut s = serializer.serialize_struct("variant", list.len())?;
+                
                 s.end()
             }
-            BlockStateRaw::MuitiPart(m) => {
-                let mut s = serializer.serialize_struct("muiltipart", 1)?;
-                s.serialize_field("map", &m.0)?;
+            BlockStateRaw::MultiPart(m) => {
+                let list = &m.0;
+                let mut s = serializer.serialize_seq(Some(list.len()))?;
+                for(k, v) in list {
+                    
+                    
+                }
                 s.end()
             }
         }
@@ -715,7 +793,7 @@ impl<'de> Deserialize<'de> for BlockStateRaw {
                 if let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
                         "variants" => Ok(Self::Value::Variants(map.next_value()?)),
-                        "multipart" => Ok(Self::Value::MuitiPart(map.next_value()?)),
+                        "multipart" => Ok(Self::Value::MultiPart(map.next_value()?)),
                         _ => Err(de::Error::unknown_field(key.as_str(), FIELDS))
                     }
                 } else {
@@ -800,7 +878,7 @@ pub fn transform(axis: Axis, rotation: Rotate90, vec3: &[f32; 3]) -> [f32; 3] {
 //                 while let Some(key) = map.next_key::<String>()? {
 //                     match key.as_str() {
 //                         "keys" => Ok(Self::Value::Variants(map.next_value()?)),
-//                         "multipart" => Ok(Self::Value::MuitiPart(map.next_value()?)),
+//                         "multipart" => Ok(Self::Value::MultiPart(map.next_value()?)),
 //                         _ => Err(de::Error::unknown_field(key.as_str(), FIELDS))
 //                     }
 //                 }

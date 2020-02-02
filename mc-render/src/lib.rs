@@ -1,5 +1,6 @@
 pub mod assets;
-pub mod render;
+pub mod model;
+pub mod glrender;
 
 #[cfg(test)]
 mod tests {

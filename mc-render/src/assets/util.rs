@@ -126,56 +126,52 @@ pub trait Provider {
 
 
 
-/**
- * 
- */
+// #[derive(Debug)]
+// pub struct ParseError {
 
-#[derive(Debug)]
-pub struct ParseError {
+//     msg: String,
 
-    msg: String,
+//     value: Value,
 
-    value: Value,
+//     source: Option<Box<dyn std::error::Error + 'static>>,
+// }
 
-    source: Option<Box<dyn std::error::Error + 'static>>,
-}
+// impl std::fmt::Display for ParseError {
 
-impl std::fmt::Display for ParseError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>)-> std::fmt::Result {
+//         f.write_str(&self.msg)?;
+//         if let Some(cause) = &self.source {
+//             f.write_fmt(format_args!("\ncaused by: {}", cause))?;
+//         }
+//         Ok(())
+//     }
+// }
 
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>)-> std::fmt::Result {
-        f.write_str(&self.msg)?;
-        if let Some(cause) = &self.source {
-            f.write_fmt(format_args!("\ncaused by: {}", cause))?;
-        }
-        Ok(())
-    }
-}
+// impl std::error::Error for ParseError {
 
-impl std::error::Error for ParseError {
+//     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+//         match &self.source {
+//             Some(b) => Some(b.as_ref()),
+//             None => None,
+//         }
+//     }
+// }
 
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match &self.source {
-            Some(b) => Some(b.as_ref()),
-            None => None,
-        }
-    }
-}
+// impl ParseError {
 
-impl ParseError {
+//     pub fn new(msg: String, value: Value) -> Self {
+//         ParseError {
+//             msg,
+//             value,
+//             source: None
+//         }
+//     }
 
-    pub fn new(msg: String, value: Value) -> Self {
-        ParseError {
-            msg,
-            value,
-            source: None
-        }
-    }
-
-    pub fn new_with<E: std::error::Error + 'static>(msg: String, value: Value, source: E) -> Self {
-        ParseError {
-            msg,
-            value,
-            source: Some(Box::new(source))
-        }
-    }
-}
+//     pub fn new_with<E: std::error::Error + 'static>(msg: String, value: Value, source: E) -> Self {
+//         ParseError {
+//             msg,
+//             value,
+//             source: Some(Box::new(source))
+//         }
+//     }
+// }

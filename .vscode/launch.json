@@ -5,14 +5,26 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python File",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/mc-render/face_rotate.py",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "(Windows) Test",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/target/debug/test_mcdata-b2430cf663d60cff.exe",
+            "program": "${workspaceFolder}/target/debug/test_model_render-358ffba807d8e391.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/mc-render",
-            "environment": [],
+            "environment": [
+                {
+                    "name": "ASSETS",
+                    "value": "F:\\Game\\Minecraft\\.minecraft\\versions\\1.15.1\\1.15.1.jar"
+                }
+            ],
             "externalConsole": false
         },
         {

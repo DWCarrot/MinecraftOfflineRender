@@ -165,38 +165,49 @@ impl<'a, R: Read + Seek> Provider for TextureImageProvider<R> {
     type Item = RgbaImage;
 
     fn provide(&mut self, name: &str) -> Option<Self::Item> {
+        let full = format!("assets/minecraft/textures/{}.mcmeta", name);
+        let animated = self.zip.borrow_mut().by_name(&full).is_ok();
         let full = format!("assets/minecraft/textures/{}.png", name);
-        match self.zip.borrow_mut().by_name(&full) {
+        let img = match self.zip.borrow_mut().by_name(&full) {
             Ok(v) => match image::png::PNGDecoder::new(v) {
                 Ok(v) => match image::DynamicImage::from_decoder(v) {
                     Ok(d) => match d {
                         image::DynamicImage::ImageRgba8(v) => {
                             self.count += 1;
-                            Some(v)
+                            v
                         },
                         image::DynamicImage::ImageRgb8(v) => {
                             self.count += 1;
-                            Some(v.convert())
+                            v.convert()
                         },
                         _ => {
                             //TODO: log
-                            return None
+                            return None;
                         }
                     },
                     Err(e) => {
                         //TODO: log
-                        return None 
+                        return None;
                     }
                 },
                 Err(e) => {
                     //TODO: log
-                    None
+                    return None;
                 }
             },
             Err(e) => {
                 //TODO: log
-                None 
+                return None;
             }
+        };
+        if animated {
+            let width = img.width();
+            let mut buf = img.into_raw();
+            buf.truncate(width as usize * width as usize * 4);
+            dbg!(name, width);
+            Some(RgbaImage::from_vec(width, width, buf).unwrap())
+        } else {
+            Some(img)
         }
     }
 }

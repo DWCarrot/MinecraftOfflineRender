@@ -147,8 +147,5 @@ fn custom_json() {
 
 #[test]
 fn try_vulkan() {
-    use mc_render::render::vulkan;
-    println!("vk");
-
-    let vk = vulkan::VulkanRender::new().unwrap();
+    
 }

@@ -1,10 +1,37 @@
 use std::io::{Read, Write, Seek};
 use std::collections::HashMap;
 use serde_json::Value;
-use mc_render::assets::{resource, util, math};
+use mc_render::assets::{resource, util};
 use mc_render::assets::util::Provider;
+use mc_render::assets::data_raw::BlockStateRaw;
 use mc_render::assets::resource::{TextureImageProvider, BlockStateRawProvider, ModelRawProvider};
-use mc_render::render::model::{TextureGen, BlockModelBuilder};
+use mc_render::model::model::{TextureGen, BlockModelBuilder};
+
+#[test]
+fn test_blockstate_parse() {
+    
+    let ifile = std::fs::File::open("tests/redstone_wire.json").unwrap();
+    let data: BlockStateRaw = serde_json::from_reader(ifile).unwrap();
+    let data = if let BlockStateRaw::MultiPart(v) = data { v } else { panic!("what?") };
+    let mut l = 1;
+    for tuple in data.into_iter() {
+        let mut expr = tuple.0;
+        println!("========================================");
+        let mut s = 0;
+        loop  {
+            let it: Vec<String> = expr.line_iter().map(|s| s.clone()).collect();
+            println!("{:?}", it);
+            s += 1;
+            if !expr.update_iter() {
+                break;
+            }
+        }
+        println!("{}", s);
+        l *= (s + 1);
+    }
+    println!("#end {}", l);
+}
+
 // #[test]
 // fn test_resource_parse() {
 //     let s = std::env::var("ASSETS").expect("$env::ASSETS is not ref to a minecraft version.jar");
@@ -83,3 +110,4 @@ impl<'a, R: Read + Seek> TextureGen for SimpleTexGen<'a, R> {
         }).clone()
     }
 }
+

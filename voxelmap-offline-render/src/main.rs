@@ -1,7 +1,7 @@
 
 //use mc_render::mcdata::{resource, model, util};
-use mc_render::render::model::Element;
-use mc_render::render::model::TransformedModel;
+use mc_render::model::model::Element;
+use mc_render::model::model::TransformedModel;
 
 use std::rc::{Rc};
 
