@@ -82,7 +82,7 @@ impl<'a, C: Context> OffScreenRenderer<'a, C> {
             shader,
             draw_params: DrawParameters {
                 depth: glium::Depth {
-                    test: glium::DepthTest::IfLessOrEqual,
+                    test: glium::DepthTest::IfMoreOrEqual,
                     write: true,
                     .. Default::default()
                 },
@@ -97,7 +97,7 @@ impl<'a, C: Context> OffScreenRenderer<'a, C> {
         I: Iterator<Item=&'b Mesh<MeshVertex>> 
     {
         let mut frame = self.ctx.surface();
-        frame.clear_all((0.0, 0.0, 0.0, 0.0), 1.0, 0);
+        frame.clear_all((0.0, 0.0, 0.0, 0.0), -1.0, 0);
         let uniforms = MeshUniform {
             world: world.into(),
             center: center.into(),
@@ -156,6 +156,7 @@ impl BlockRenderer for MeshGenerator {
             }
             let mesh = Mesh::new();
             self.meshes.push((mesh, prior));
+            self.current = self.meshes.len() - 1;
             return old;
         }
         return prior;

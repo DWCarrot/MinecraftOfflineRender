@@ -22,7 +22,7 @@ fn test_merge_raw() {
     use mc_render::assets::data_raw::*;
     let s = std::env::var("ASSETS").expect("$env:ASSETS is not ref to a minecraft version.jar");
     let ifile = std::fs::File::open(s).unwrap();
-    let mut a = resource::JarArchive::new(ifile).unwrap();
+    let mut a = resource::AssetsArchive::new(ifile).unwrap();
     let mut list = Vec::new();
     a.iter_zip_file_names(
         util::Scanner::new("assets/minecraft/models/block/{}.json"), 
@@ -38,7 +38,7 @@ fn test_merge_raw() {
         
         
         let full = format!("assets/minecraft/models/{}.json", name);
-        let ifile = a.get_file(&full).unwrap();
+        let ifile = a.by_name(&full).unwrap();
         match serde_json::from_reader(ifile) {
             Ok(v) => {
                 lk.insert(name, v);
@@ -86,11 +86,11 @@ fn test_blockstate_one() {
 
     let s = std::env::var("ASSETS").expect("$env:ASSETS is not ref to a minecraft version.jar");
     let ifile = std::fs::File::open(s).unwrap();
-    let mut a = resource::JarArchive::new(ifile).unwrap();
+    let mut a = resource::AssetsArchive::new(ifile).unwrap();
 
     for name in &["oak_fence"] {
         let full = format!("assets/minecraft/blockstates/{}.json", name);
-        let ifile = a.get_file(&full).expect(&format!("?:{}", name));
+        let ifile = a.by_name(&full).expect(&format!("?:{}", name));
         match serde_json::from_reader(ifile) {
             Ok(v) => {
                 let k: BlockStateRaw = v;
@@ -114,7 +114,7 @@ fn test_blockstate_raw() {
 
     let s = std::env::var("ASSETS").expect("$env:ASSETS is not ref to a minecraft version.jar");
     let ifile = std::fs::File::open(s).unwrap();
-    let mut a = resource::JarArchive::new(ifile).unwrap();
+    let mut a = resource::AssetsArchive::new(ifile).unwrap();
     let mut list = Vec::new();
     a.iter_zip_file_names(
         util::Scanner::new("assets/minecraft/blockstates/{}.json"), 
@@ -132,7 +132,7 @@ fn test_blockstate_raw() {
     let mut map = std::collections::HashMap::new();
     for name in list.into_iter() {
         let full = format!("assets/minecraft/blockstates/{}.json", name);
-        let ifile = a.get_file(&full).expect(&format!("?:{}", name));
+        let ifile = a.by_name(&full).expect(&format!("?:{}", name));
         match serde_json::from_reader(ifile) {
             Ok(v) => {
                 let k: BlockStateRaw = v;
@@ -170,7 +170,7 @@ fn test_full() {
     let s = std::env::var("ASSETS").expect("$env:ASSETS is not ref to a minecraft version.jar");
     let ifile = std::fs::File::open(s).unwrap();
     println!("opening...");
-    let mut a = resource::JarArchive::new(ifile).unwrap();
+    let mut a = resource::AssetsArchive::new(ifile).unwrap();
     println!("listing...");
     let mut list = Vec::new();
     a.iter_zip_file_names(
@@ -186,7 +186,7 @@ fn test_full() {
     let mut map = HashMap::new();
     for name in list.into_iter() {
         let full = format!("assets/minecraft/blockstates/{}.json", name);
-        let ifile = a.get_file(&full).expect(&format!("?:{}", name));
+        let ifile = a.by_name(&full).expect(&format!("?:{}", name));
         match serde_json::from_reader(ifile) {
             Ok(v) => {
                 let k: BlockStateRaw = v;
@@ -200,7 +200,7 @@ fn test_full() {
     }
 
     struct ModelProvider<'a, R: Read + Seek> {
-        rsc: &'a mut resource::JarArchive<R>,
+        rsc: &'a mut resource::AssetsArchive<R>,
         cache: HashMap<String, ModelRaw>,
     };
 
@@ -213,7 +213,7 @@ fn test_full() {
                 Entry::Occupied(e) => Some(e.get().clone()),
                 Entry::Vacant(e) => {
                     let full = format!("assets/minecraft/models/{}.json", name);
-                    let ifile = self.rsc.get_file(&full).unwrap();
+                    let ifile = self.rsc.by_name(&full).unwrap();
                     match serde_json::from_reader::<_, ModelRaw>(ifile) {
                         Ok(v) => {
                             e.insert(v.clone());
@@ -228,9 +228,4 @@ fn test_full() {
             }
         }
     }
-    // println!("loading model...")
-    // let u = HashMap::new();
-    // for (name, state) in &map {
-        
-    // }
 }

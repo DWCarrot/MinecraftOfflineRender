@@ -4,7 +4,7 @@ use serde_json::Value;
 use mc_render::assets::{resource, util};
 use mc_render::assets::util::Provider;
 use mc_render::assets::data_raw::BlockStateRaw;
-use mc_render::assets::resource::{TextureImageProvider, BlockStateRawProvider, ModelRawProvider};
+use mc_render::assets::resource::{AssetsArchive, TextureImageProvider, BlockStateRawProvider, ModelRawProvider};
 use mc_render::model::model::{TextureGen, BlockModelBuilder};
 
 #[test]
@@ -47,7 +47,7 @@ fn test_blockstate_parse() {
 fn test_blockstate_find() {
     let s = std::env::var("ASSETS").expect("$env::ASSETS is not ref to a minecraft version.jar");
     let ifile = std::fs::File::open(s).unwrap();
-    let mut a = resource::JarArchive::new(ifile).unwrap();
+    let mut a = resource::AssetsArchive::new(ifile).unwrap();
     let mut list = HashMap::new();
     a.iter_zip_file_names(
         util::Scanner::new("assets/minecraft/blockstates/{}.json"), 
@@ -57,7 +57,7 @@ fn test_blockstate_find() {
         }
     ).expect("what: ");
 
-    let zip = std::rc::Rc::new(std::cell::RefCell::new(a.unwrap()));
+    let zip = std::rc::Rc::new(std::cell::RefCell::new(a));
     let mut mdl_pvd = ModelRawProvider::from(zip.clone());
     let mut bs_pvd = BlockStateRawProvider::from(zip.clone());
     let mut tex_pvd = TextureImageProvider::from(zip.clone());

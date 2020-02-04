@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate glium;
 
-use mc_render::assets::resource::{self, TextureImageProvider}; 
+use mc_render::assets::resource::{self, AssetsArchive ,TextureImageProvider}; 
 use mc_render::glrender::texture::{CombinedTextureGen, CombinedTexture};
 use mc_render::glrender::context;
 use mc_render::glrender::mesh;
@@ -16,7 +16,7 @@ use glium::Surface;
 fn test_gltexture() {
     let s = std::env::var("ASSETS").expect("$env::ASSETS is not ref to a minecraft version.jar");
     let ifile = std::fs::File::open(s).unwrap();
-    let zip = std::rc::Rc::new(std::cell::RefCell::new(ZipArchive::new(ifile).unwrap()));
+    let zip = std::rc::Rc::new(std::cell::RefCell::new(AssetsArchive::new(ifile).unwrap()));
 
     let pvd = TextureImageProvider::from(zip.clone());
 
@@ -183,7 +183,7 @@ fn test_glbaserender() {
     
     let s = std::env::var("ASSETS").expect("$env::ASSETS is not ref to a minecraft version.jar");
     let ifile = std::fs::File::open(s).unwrap();
-    let zip = std::rc::Rc::new(std::cell::RefCell::new(ZipArchive::new(ifile).unwrap()));
+    let zip = std::rc::Rc::new(std::cell::RefCell::new(AssetsArchive::new(ifile).unwrap()));
     let pvd = TextureImageProvider::from(zip.clone());
 
     use context::Context;
@@ -221,27 +221,27 @@ fn test_glbaserender() {
     println!("{:?} {:?} {:?} {:?}", bl, br, tl, tr);
     m1.append(&[
         MeshVertex { loc: [0, 0, 0], pos: bl.into(), tex: [0.0, 0.0], tex_id: 1, color: [255, 255, 255, 255], light: 0xFF },
-        MeshVertex { loc: [0, 0, 0], pos: br.into(), tex: [1.0, 0.0], tex_id: 1, color: [255, 255, 255, 255], light: 0xFF },
-        MeshVertex { loc: [0, 0, 0], pos: tl.into(), tex: [0.0, 1.0], tex_id: 1, color: [255, 255, 255, 255], light: 0xFF },
-        MeshVertex { loc: [0, 0, 0], pos: tr.into(), tex: [1.0, 1.0], tex_id: 1, color: [255, 255, 255, 255], light: 0xFF },
+        MeshVertex { loc: [0, 0, 0], pos: br.into(), tex: [16.0, 0.0], tex_id: 1, color: [255, 255, 255, 255], light: 0xFF },
+        MeshVertex { loc: [0, 0, 0], pos: tl.into(), tex: [0.0, 16.0], tex_id: 1, color: [255, 255, 255, 255], light: 0xFF },
+        MeshVertex { loc: [0, 0, 0], pos: tr.into(), tex: [16.0, 16.0], tex_id: 1, color: [255, 255, 255, 255], light: 0xFF },
     ]);
 
     c.get_face_vert(Face::Down, &mut bl, &mut br, &mut tl, &mut tr);
     println!("{:?} {:?} {:?} {:?}", bl, br, tl, tr);
     m1.append(&[
         MeshVertex { loc: [0, 0, 0], pos: bl.into(), tex: [0.0, 0.0], tex_id: 2, color: [255, 255, 255, 255], light: 0xFF },
-        MeshVertex { loc: [0, 0, 0], pos: br.into(), tex: [1.0, 0.0], tex_id: 2, color: [255, 255, 255, 255], light: 0xFF },
-        MeshVertex { loc: [0, 0, 0], pos: tl.into(), tex: [0.0, 1.0], tex_id: 2, color: [255, 255, 255, 255], light: 0xFF },
-        MeshVertex { loc: [0, 0, 0], pos: tr.into(), tex: [1.0, 1.0], tex_id: 2, color: [255, 255, 255, 255], light: 0xFF },
+        MeshVertex { loc: [0, 0, 0], pos: br.into(), tex: [16.0, 0.0], tex_id: 2, color: [255, 255, 255, 255], light: 0xFF },
+        MeshVertex { loc: [0, 0, 0], pos: tl.into(), tex: [0.0, 16.0], tex_id: 2, color: [255, 255, 255, 255], light: 0xFF },
+        MeshVertex { loc: [0, 0, 0], pos: tr.into(), tex: [16.0, 16.0], tex_id: 2, color: [255, 255, 255, 255], light: 0xFF },
     ]);
 
     c.get_face_vert(Face::North, &mut bl, &mut br, &mut tl, &mut tr);
     println!("{:?} {:?} {:?} {:?}", bl, br, tl, tr);
     m1.append(&[
         MeshVertex { loc: [0, 0, 0], pos: bl.into(), tex: [0.0, 0.0], tex_id: 3, color: [255, 255, 255, 255], light: 0xFF },
-        MeshVertex { loc: [0, 0, 0], pos: br.into(), tex: [1.0, 0.0], tex_id: 3, color: [255, 255, 255, 255], light: 0xFF },
-        MeshVertex { loc: [0, 0, 0], pos: tl.into(), tex: [0.0, 1.0], tex_id: 3, color: [255, 255, 255, 255], light: 0xFF },
-        MeshVertex { loc: [0, 0, 0], pos: tr.into(), tex: [1.0, 1.0], tex_id: 3, color: [255, 255, 255, 255], light: 0xFF },
+        MeshVertex { loc: [0, 0, 0], pos: br.into(), tex: [16.0, 0.0], tex_id: 3, color: [255, 255, 255, 255], light: 0xFF },
+        MeshVertex { loc: [0, 0, 0], pos: tl.into(), tex: [0.0, 16.0], tex_id: 3, color: [255, 255, 255, 255], light: 0xFF },
+        MeshVertex { loc: [0, 0, 0], pos: tr.into(), tex: [16.0, 16.0], tex_id: 3, color: [255, 255, 255, 255], light: 0xFF },
     ]);
 
     //let mut m2 = Mesh::new();
@@ -249,9 +249,9 @@ fn test_glbaserender() {
     println!("{:?} {:?} {:?} {:?}", bl, br, tl, tr);
     m1.append(&[
         MeshVertex { loc: [0, 0, -1], pos: bl.into(), tex: [0.0, 0.0], tex_id: 4, color: [ 69, 173, 242, 255], light: 0xFF },
-        MeshVertex { loc: [0, 0, -1], pos: br.into(), tex: [1.0, 0.0], tex_id: 4, color: [ 69, 173, 242, 255], light: 0xFF },
-        MeshVertex { loc: [0, 0, -1], pos: tl.into(), tex: [0.0, 1.0], tex_id: 4, color: [ 69, 173, 242, 255], light: 0xFF },
-        MeshVertex { loc: [0, 0, -1], pos: tr.into(), tex: [1.0, 1.0], tex_id: 4, color: [ 69, 173, 242, 255], light: 0xFF },
+        MeshVertex { loc: [0, 0, -1], pos: br.into(), tex: [16.0, 0.0], tex_id: 4, color: [ 69, 173, 242, 255], light: 0xFF },
+        MeshVertex { loc: [0, 0, -1], pos: tl.into(), tex: [0.0, 16.0], tex_id: 4, color: [ 69, 173, 242, 255], light: 0xFF },
+        MeshVertex { loc: [0, 0, -1], pos: tr.into(), tex: [16.0, 16.0], tex_id: 4, color: [ 69, 173, 242, 255], light: 0xFF },
     ]);
 
     let lmmp = glium::texture::Texture2d::new(ctx.facade(), glrender::default_lmmp()).unwrap();
@@ -260,8 +260,8 @@ fn test_glbaserender() {
 
     let world = 
         Matrix4::from_diagonal(Vector4::new(0.5, 0.5, 0.5, 1.0)) *
-        Matrix4::from_angle_y(Deg(30.0)) *
-        Matrix4::from_angle_x(Deg(30.0));
+        Matrix4::from_angle_x(Deg(30.0)) *
+        Matrix4::from_angle_y(Deg(30.0));
 
 
     let center = Vector3::new(0, 0, 0);

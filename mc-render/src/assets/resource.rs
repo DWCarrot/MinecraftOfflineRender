@@ -16,56 +16,74 @@ use super::data_raw::ModelRaw;
 use super::data_raw::BlockStateRaw;
 
 
-pub struct JarArchive<R: Read + Seek> {
-    zip: ZipArchive<R>,
+pub struct AssetsArchive<R: Read + Seek> {
+    zips: Vec<ZipArchive<R>>,
 }
 
-impl<R: Read + Seek> JarArchive<R> {
+impl<R: Read + Seek> AssetsArchive<R> {
 
     pub fn new(reader: R) -> ZipResult<Self> {
         let zip = ZipArchive::new(reader)?;
-        Ok(JarArchive{
-            zip
+        Ok(AssetsArchive{
+            zips: vec![zip]
         })
     }
 
-    pub fn get_file<'a>(&'a mut self, name: &str) -> ZipResult<ZipFile<'a>> {
-        self.zip.by_name(name)
+    pub fn new_list<I: IntoIterator<Item = R>>(list: I) -> ZipResult<Self> {
+        let mut zips = Vec::new();
+        for reader in list.into_iter() {
+            zips.push(ZipArchive::new(reader)?);
+        }
+        Ok(AssetsArchive{
+            zips
+        })
+    }
+
+    pub fn by_name<'a>(&'a mut self, name: &str) -> ZipResult<ZipFile<'a>> {
+        use zip::result::ZipError;
+        let mut err = ZipError::FileNotFound;
+        for zip in self.zips.iter_mut() {
+            match zip.by_name(name) {
+                Ok(v) => return Ok(v),
+                Err(e) => {
+                    err = e;
+                    continue;
+                }
+            }
+        }
+        Err(err)
     }
 
     pub fn iter_zip_file_names<E, F: FnMut(&[&str]) -> Result<bool,E>>(&mut self, filter: Scanner, mut f: F) -> Result<bool, E> {
-        for i in 0..self.zip.len() {
-            let zipfile = self.zip.by_index(i).unwrap();
-            let name = zipfile.name();
-            let mut args = [name;8];
-            if filter.scan(name, &mut args) == filter.argc() {
-                if !f(&args)? {
-                    return Ok(false);
+        for zip in self.zips.iter_mut().rev() {
+            for i in 0..zip.len() {
+                let zipfile = zip.by_index(i).unwrap();
+                let name = zipfile.name();
+                let mut args = [name;8];
+                if filter.scan(name, &mut args) == filter.argc() {
+                    if !f(&args)? {
+                        return Ok(false);
+                    }
                 }
             }
         }
         Ok(true)
     }
 
-    pub fn unwrap(self) -> ZipArchive<R> {
-        self.zip
-    }
-
 }
-
 
 /**
  * 
  */
 
 pub struct ModelRawProvider<R: Read + Seek> {
-    zip: Rc<RefCell<ZipArchive<R>>>,
+    zip: Rc<RefCell<AssetsArchive<R>>>,
     pub count: usize
 }
 
-impl<R: Read + Seek> From<Rc<RefCell<ZipArchive<R>>>> for ModelRawProvider<R> {
+impl<R: Read + Seek> From<Rc<RefCell<AssetsArchive<R>>>> for ModelRawProvider<R> {
 
-    fn from(zip: Rc<RefCell<ZipArchive<R>>>) -> Self {
+    fn from(zip: Rc<RefCell<AssetsArchive<R>>>) -> Self {
         ModelRawProvider {
             zip,
             count: 0
@@ -103,13 +121,13 @@ impl<R: Read + Seek> Provider for ModelRawProvider<R> {
  */
 
 pub struct BlockStateRawProvider<R: Read + Seek> {
-    zip: Rc<RefCell<ZipArchive<R>>>,
+    zip: Rc<RefCell<AssetsArchive<R>>>,
     pub count: usize
 }
 
-impl<R: Read + Seek> From<Rc<RefCell<ZipArchive<R>>>> for BlockStateRawProvider<R> {
+impl<R: Read + Seek> From<Rc<RefCell<AssetsArchive<R>>>> for BlockStateRawProvider<R> {
 
-    fn from(zip: Rc<RefCell<ZipArchive<R>>>) -> Self {
+    fn from(zip: Rc<RefCell<AssetsArchive<R>>>) -> Self {
         BlockStateRawProvider {
             count: 0,
             zip
@@ -147,13 +165,13 @@ impl<R: Read + Seek> Provider for BlockStateRawProvider<R> {
  */
 
 pub struct TextureImageProvider<R: Read + Seek> {
-    zip: Rc<RefCell<ZipArchive<R>>>,
+    zip: Rc<RefCell<AssetsArchive<R>>>,
     pub count: usize
 }
 
-impl<R: Read + Seek> From<Rc<RefCell<ZipArchive<R>>>> for TextureImageProvider<R> {
+impl<R: Read + Seek> From<Rc<RefCell<AssetsArchive<R>>>> for TextureImageProvider<R> {
 
-    fn from(zip: Rc<RefCell<ZipArchive<R>>>) -> Self {
+    fn from(zip: Rc<RefCell<AssetsArchive<R>>>) -> Self {
         TextureImageProvider {
             count: 0,
             zip
@@ -204,7 +222,7 @@ impl<'a, R: Read + Seek> Provider for TextureImageProvider<R> {
             let width = img.width();
             let mut buf = img.into_raw();
             buf.truncate(width as usize * width as usize * 4);
-            dbg!(name, width);
+            println!("animated: {} ({})", name, width);
             Some(RgbaImage::from_vec(width, width, buf).unwrap())
         } else {
             Some(img)

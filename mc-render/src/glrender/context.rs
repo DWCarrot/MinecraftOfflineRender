@@ -87,6 +87,34 @@ pub struct WindowHideContext {
     event_loop: EventsLoop,
 }
 
+impl WindowHideContext {
+
+    pub fn wait(&mut self) {
+        let mut working = true;
+        let itv = std::time::Duration::from_millis(1);
+        while working {
+            self.event_loop.poll_events(|e| {
+                match e {
+                    glutin::Event::WindowEvent{window_id, event} => {
+                        match event {
+                            glutin::WindowEvent::CloseRequested => {
+                                working = false;
+                            },
+                            _ => {
+
+                            }
+                        }
+                    },
+                    _ => {
+
+                    }
+                }
+            });
+            std::thread::sleep(itv);
+        }
+    }
+}
+
 impl Context for WindowHideContext {
     type F = Display;
 
@@ -104,9 +132,16 @@ impl Context for WindowHideContext {
 
     fn build(width: u32, height: u32, version: GlRequest) -> Self {
         let event_loop = EventsLoop::new();
+        let dpi = {
+            let w = glutin::WindowBuilder::new()
+                .with_visibility(false)
+                .build(&event_loop)
+                .unwrap();
+            w.get_hidpi_factor()
+        };
         let wb = glutin::WindowBuilder::new()
             .with_visibility(true)
-            .with_dimensions(glutin::dpi::PhysicalSize::from((width, height)).to_logical(1.5));
+            .with_dimensions(glutin::dpi::PhysicalSize::from((width, height)).to_logical(dpi));
         let cb = glutin::ContextBuilder::new()
             .with_pixel_format(24, 8)
             .with_depth_buffer(24)

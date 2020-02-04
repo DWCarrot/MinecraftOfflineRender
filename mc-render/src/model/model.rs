@@ -8,6 +8,7 @@ use cgmath::Matrix3;
 use cgmath::Vector2;
 use cgmath::Vector3;
 
+use crate::assets::data_type::Axis;
 use crate::assets::data_type::Face;
 use crate::assets::data_type::Rotate90;
 use crate::assets::util::Provider;
@@ -16,7 +17,7 @@ use crate::assets::data_raw::ElementRaw;
 use crate::assets::data_raw::ModelRaw;
 use crate::assets::data_raw::BlockStateRaw;
 use crate::assets::data_raw::ApplyRaw;
-use crate::assets::data_raw::AppliedModelRaw;
+use crate::assets::data_raw::Rotation as RawRotation;
 use super::blockstate::BlockState;
 
 pub trait TextureGen {
@@ -152,7 +153,7 @@ impl<Tex> TransformedModel<Tex> {
         let rotate = if !self.uvlock {
             Rotate90::R0
         } else {
-            - match original_face {
+            match original_face {
                 Face::Up => self.y.clone(),
                 Face::Down => -self.y.clone(),
                 Face::East => -self.x.clone(),
@@ -161,7 +162,7 @@ impl<Tex> TransformedModel<Tex> {
                 Face::North => Rotate90::R0,
             }
         };
-        rotate
+        -rotate
     }
 
     pub fn mapping_transform(&self, t: &Matrix3<f32>) -> Matrix3<f32> {
@@ -322,11 +323,36 @@ impl<S: Copy> Cubic<S> {
 
 
 #[derive(Debug)]
+pub struct Rotation<S> {
+
+    pub origin: Vector3<S>,
+
+    pub transf: Matrix3<S>,
+
+}
+
+impl Rotation<f32> {
+
+    pub fn from_raw<'a>(raw: &'a RawRotation) -> Self {
+        use cgmath::Deg;
+        Rotation {
+            origin: Vector3::from(raw.origin),
+            transf: match raw.axis {
+                Axis::X => Matrix3::from_angle_x(Deg(raw.angle)),
+                Axis::Y => Matrix3::from_angle_y(Deg(raw.angle)),
+                Axis::Z => Matrix3::from_angle_z(Deg(raw.angle)),
+            }
+        }
+    }
+}
+
+
+#[derive(Debug)]
 pub struct Element<Tex> {
 
     pub cubic: Cubic<f32>,
 
-    pub rotation: (Vector3<f32>, Matrix3<f32>),
+    pub rotation: Rotation<f32>,
 
     pub faces: [Option<FaceTexture<Tex>>; 6],
 
@@ -417,24 +443,13 @@ impl<Tex> FaceTexture<Tex> {
 impl<Tex> Element<Tex> {
 
     pub fn from_raw<'a>(raw: &ElementRaw, tex_gen: &'a mut dyn TextureGen<Texture = Tex>) -> Self {
-        use crate::assets::data_type::Axis;
-        use cgmath::Deg;
         Element {
             cubic: Cubic {
                 from: Vector3::from(raw.from),
                 to: Vector3::from(raw.to),
             },
             shade: raw.shade,
-            rotation: {
-                let r = raw.rotation.clone().unwrap_or_default();
-                let origin = Vector3::from(r.origin);
-                let transf = match r.axis {
-                    Axis::X => Matrix3::from_angle_x(Deg(r.angle)),
-                    Axis::Y => Matrix3::from_angle_y(Deg(r.angle)),
-                    Axis::Z => Matrix3::from_angle_z(Deg(r.angle)),
-                };
-                (origin, transf)
-            },
+            rotation: Rotation::from_raw(&raw.rotation.clone().unwrap_or_default()),
             faces: {
                 let mut faces = [None, None, None, None, None, None];
                 for (k, v) in &raw.faces {
@@ -613,11 +628,14 @@ impl<'a, Tex> BlockModelBuilder<'a, Tex> {
                         let parent = mdl_pvd.provide(s).ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, s.to_string()))?;
                         mdl_raw.merge(&parent);
                     }
-                    let mut itex_gen = IndexTexGen{ 
+                    let mut itex_gen = IndexTexGen { 
                         index: mdl_raw.textures.as_ref().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "texture"))?, 
                         tex_gen: *tex_gen
                     };
                     let rcmodel = Rc::new(Model::from_raw(&mdl_raw, &mut itex_gen));
+                    if rcmodel.elements.len() == 0 {
+                        println!("empty model: {}", v.model);
+                    }
                     vc.insert(rcmodel).clone()
                 }
             };
@@ -653,6 +671,142 @@ impl<'a, Tex> BlockModelBuilder<'a, Tex> {
         } else {
             Err(io::Error::new(io::ErrorKind::NotFound, name.to_string()))
         }      
+    }
+
+    pub fn build_water_model(&mut self) -> Rc<TransformedModel<Tex>> {
+        let model = Rc::new(Model {
+            ambientocclusion: true,
+            elements: vec![
+                Element {
+                    cubic: Cubic {
+                        from: Vector3::new(0.0, 0.0, 0.0),
+                        to:  Vector3::new(16.0, 16.0, 16.0),
+                    },
+                    shade: false,
+                    rotation: Rotation {
+                        origin: Vector3::new(8.0, 8.0, 8.0),
+                        transf: Matrix3::new(
+                            1.0, 0.0, 0.0,
+                            0.0, 1.0, 0.0,
+                            0.0, 0.0, 1.0
+                        )
+                    },
+                    faces: [
+                        Some(FaceTexture {
+                            uv: Matrix2::new(0.0, 0.0, 16.0, 16.0),
+                            cullface: None,
+                            rotation: Rotate90::R0,
+                            texture: self.tex_gen.get("block/water_still"),
+                            tintindex: Some(0)
+                        }),
+                        None,
+                        Some(FaceTexture {
+                            uv: Matrix2::new(0.0, 0.0, 16.0, 16.0),
+                            cullface: None,
+                            rotation: Rotate90::R0,
+                            texture: self.tex_gen.get("block/water_still"),
+                            tintindex: Some(0)
+                        }),
+                        Some(FaceTexture {
+                            uv: Matrix2::new(0.0, 0.0, 16.0, 16.0),
+                            cullface: None,
+                            rotation: Rotate90::R0,
+                            texture: self.tex_gen.get("block/water_still"),
+                            tintindex: Some(0)
+                        }),
+                        Some(FaceTexture {
+                            uv: Matrix2::new(0.0, 0.0, 16.0, 16.0),
+                            cullface: None,
+                            rotation: Rotate90::R0,
+                            texture: self.tex_gen.get("block/water_still"),
+                            tintindex: Some(0)
+                        }),
+                        Some(FaceTexture {
+                            uv: Matrix2::new(0.0, 0.0, 16.0, 16.0),
+                            cullface: None,
+                            rotation: Rotate90::R0,
+                            texture: self.tex_gen.get("block/water_still"),
+                            tintindex: Some(0)
+                        }),
+                    ]
+                }
+            ]
+        });
+        let tmodel = Rc::new(TransformedModel {
+            model,
+            uvlock: false,
+            x: Rotate90::R0,
+            y: Rotate90::R0,
+        });
+        tmodel
+    }
+
+    pub fn build_lava_model(&mut self) -> Rc<TransformedModel<Tex>> {
+        let model = Rc::new(Model {
+            ambientocclusion: true,
+            elements: vec![
+                Element {
+                    cubic: Cubic {
+                        from: Vector3::new(0.0, 0.0, 0.0),
+                        to:  Vector3::new(16.0, 16.0, 16.0),
+                    },
+                    shade: false,
+                    rotation: Rotation {
+                        origin: Vector3::new(8.0, 8.0, 8.0),
+                        transf: Matrix3::new(
+                            1.0, 0.0, 0.0,
+                            0.0, 1.0, 0.0,
+                            0.0, 0.0, 1.0
+                        )
+                    },
+                    faces: [
+                        Some(FaceTexture {
+                            uv: Matrix2::new(0.0, 0.0, 16.0, 16.0),
+                            cullface: None,
+                            rotation: Rotate90::R0,
+                            texture: self.tex_gen.get("block/lava_still"),
+                            tintindex: Some(0)
+                        }),
+                        None,
+                        Some(FaceTexture {
+                            uv: Matrix2::new(0.0, 0.0, 16.0, 16.0),
+                            cullface: None,
+                            rotation: Rotate90::R0,
+                            texture: self.tex_gen.get("block/lava_still"),
+                            tintindex: Some(0)
+                        }),
+                        Some(FaceTexture {
+                            uv: Matrix2::new(0.0, 0.0, 16.0, 16.0),
+                            cullface: None,
+                            rotation: Rotate90::R0,
+                            texture: self.tex_gen.get("block/lava_still"),
+                            tintindex: Some(0)
+                        }),
+                        Some(FaceTexture {
+                            uv: Matrix2::new(0.0, 0.0, 16.0, 16.0),
+                            cullface: None,
+                            rotation: Rotate90::R0,
+                            texture: self.tex_gen.get("block/lava_still"),
+                            tintindex: Some(0)
+                        }),
+                        Some(FaceTexture {
+                            uv: Matrix2::new(0.0, 0.0, 16.0, 16.0),
+                            cullface: None,
+                            rotation: Rotate90::R0,
+                            texture: self.tex_gen.get("block/lava_still"),
+                            tintindex: Some(0)
+                        }),
+                    ]
+                }
+            ]
+        });
+        let tmodel = Rc::new(TransformedModel {
+            model,
+            uvlock: false,
+            x: Rotate90::R0,
+            y: Rotate90::R0,
+        });
+        tmodel
     }
 }
 

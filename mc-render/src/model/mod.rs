@@ -67,8 +67,8 @@ where
                     let mut vp2 = Vector3::zero();
                     let mut vp3 = Vector3::zero();
                     element.cubic.get_face_vert(mface.clone(), &mut vp0, &mut vp1, &mut vp2, &mut vp3);
-                    let tmat = tmodel.mapping_transform(&element.rotation.1);
-                    let center = element.rotation.0;
+                    let tmat = tmodel.mapping_transform(&element.rotation.transf);
+                    let center = element.rotation.origin;
                     vp0 = tmat * (vp0 - center) + center;
                     vp1 = tmat * (vp1 - center) + center;
                     vp2 = tmat * (vp2 - center) + center;
@@ -95,7 +95,7 @@ where
             draw_model(tmodel, &block, renderer)?;
         }
     }
-    if !(block.is_water() && block.is_water_logged()) {
+    if !block.is_water() {
         renderer.state(0);
         for tmodel in block.get_models() {
             draw_model(tmodel, &block, renderer)?;
