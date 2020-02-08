@@ -1,17 +1,24 @@
 pub mod block;
 pub mod blockstate;
 pub mod model;
+pub mod biome;
 
-use std::rc::Rc;
+use std::collections::hash_map::HashMap;
 
 use cgmath::Vector2;
 use cgmath::Vector3;
 use cgmath::Zero;
 
 use crate::assets::data_type::Face;
-use model::TransformedModel;
+use crate::assets::util::Provider;
+use crate::assets::data_raw::ModelRaw;
+use crate::assets::data_raw::BlockStateRaw;
+use model::RefModel;
+use model::BlockModelBuilder;
+use model::TextureGen;
 use block::World;
 use block::RenderableBlock;
+use blockstate::BlockState;
 
 pub trait BlockRenderer {
     type Texture: Clone;
@@ -45,10 +52,10 @@ pub fn draw<T, E, B> (
 ) -> Result<(), E>
 where
     T: Clone,
-    B: RenderableBlock<Model = Rc<TransformedModel<T>>>,
+    B: RenderableBlock<Model = RefModel<T>>,
 {
     
-    let draw_model = |tmodel: &Rc<TransformedModel<T>>, block: &B, renderer: &mut dyn BlockRenderer<Texture=T,E=E>| -> Result<(), E> {
+    let draw_model = |tmodel: &RefModel<T>, block: &B, renderer: &mut dyn BlockRenderer<Texture=T,E=E>| -> Result<(), E> {
         let model = tmodel.model.as_ref();
         for element in model.elements.as_slice() {
             for face in faces {
@@ -102,4 +109,55 @@ where
         }
     }
     Ok(())
+}
+
+
+/**
+ * 
+ */
+pub struct ModelProvider<Tex> {
+
+    cache: HashMap<String, BlockState<String, RefModel<Tex>>>,
+
+}
+
+impl<Tex> ModelProvider<Tex> {
+
+    pub fn new() -> Self {
+        ModelProvider {
+            cache: HashMap::new()
+        }
+    }
+
+    pub fn build<'a, I: Iterator<Item = String>>(
+        &mut self,
+        namespace: &str,
+        blocks: I,
+        bs_pvd: &'a mut dyn Provider<Item = BlockStateRaw>,
+        mdl_pvd: &'a mut dyn Provider<Item = ModelRaw>,
+        tex_gen: &'a mut dyn TextureGen<Texture = Tex>,
+    ) {
+        let mut builder = BlockModelBuilder::new(bs_pvd, mdl_pvd, tex_gen);
+        for name in blocks {
+            let blockstate = match name.as_str() {
+                "water" => BlockState::Single(builder.build_water_model()),
+                "lava" => BlockState::Single(builder.build_lava_model()),
+                _ => match builder.build(name.as_str()) {
+                    Ok(blockstate) => blockstate,
+                    Err(e) => {
+                        continue;
+                    }
+                },
+            };
+            self.cache.insert(format!("{}:{}", namespace, name), blockstate);
+        }
+    }
+
+    pub fn get<'a, I: Iterator<Item = &'a str>>(&'a self, name: &str, key: I) -> Vec<RefModel<Tex>> {
+        if let Some(blockstate) = self.cache.get(name) {
+            blockstate.get(key)
+        } else {
+            Vec::new()
+        }
+    }
 }

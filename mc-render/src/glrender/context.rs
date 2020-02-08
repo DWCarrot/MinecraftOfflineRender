@@ -1,9 +1,3 @@
-
-
-use std::path::Path;
-use std::io;
-use std::io::Read;
-
 use glium::glutin;
 use glutin::GlRequest;
 use glutin::EventsLoop;

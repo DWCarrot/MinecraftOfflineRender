@@ -19,6 +19,11 @@ use crate::assets::data_raw::BlockStateRaw;
 use crate::assets::data_raw::ApplyRaw;
 use crate::assets::data_raw::Rotation as RawRotation;
 use super::blockstate::BlockState;
+use super::blockstate::Expression;
+
+
+pub type RefModel<Tex> = Rc<TransformedModel<Tex>>;
+
 
 pub trait TextureGen {
     type Texture;
@@ -645,15 +650,14 @@ impl<'a, Tex> BlockModelBuilder<'a, Tex> {
         if let Some(bs_raw) = self.bs_pvd.provide(name) {
             match bs_raw {
                 BlockStateRaw::Variants(v_raw) => {
-                    let mut blockstate = BlockState::new();
-                    blockstate.start_group();
+                    let mut blockstate = BlockState::Variants(Expression::default());
                     for(keys, apply_raw) in v_raw.into_iter() {
                         blockstate.insert_group(keys.iter(), transf_apply(apply_raw)?);
                     }
-                    Ok(blockstate)
+                    Ok(blockstate.try_simplify_variant())
                 },
                 BlockStateRaw::MultiPart(m_raw) => {
-                    let mut blockstate = BlockState::new();
+                    let mut blockstate = BlockState::MultiPart(Expression::default(), Vec::default());
                     for(mut group, apply_raw) in m_raw.into_iter() {
                         let model = transf_apply(apply_raw)?;
                         blockstate.start_group();

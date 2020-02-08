@@ -8,3 +8,6 @@ edition = "2018"
 
 [dependencies]
 mc-render = {path = "../mc-render"}
+zip = { version = "^0.5", features = ["deflate-miniz"] }
+image = "^0.22"
+cgmath = "^0.17"

@@ -425,7 +425,7 @@ impl<'de> Deserialize<'de> for ApplyRaw {
                 ApplyRaw::deserialize(deserializer)
             }
         }
-        const FIELDS: &'static [&'static str] = &["x", "y", "uvlock", "model", "weight"];
+        //const FIELDS: &'static [&'static str] = &["x", "y", "uvlock", "model", "weight"];
         deserializer.deserialize_any(InnerVisitor)
     }
 }

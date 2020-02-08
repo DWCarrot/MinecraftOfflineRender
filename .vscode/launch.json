@@ -8,7 +8,7 @@
             "name": "Python File",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/mc-render/face_rotate.py",
+            "program": "${workspaceFolder}/mc-render/gen_biomes.py",
             "console": "integratedTerminal"
         },
         {

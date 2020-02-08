@@ -15,11 +15,9 @@ use glium::framebuffer::SimpleFrameBuffer;
 use glium::uniforms::MagnifySamplerFilter;
 
 use image::RgbaImage;
-use image::imageops::FilterType;
 
 use crate::assets::util::Provider;
 use crate::model::model::TextureGen;
-use super::context::Context;
 
 pub type GEResult<T> = Result<T, Box<dyn std::error::Error>>;
 

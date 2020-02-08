@@ -1,37 +1,22 @@
+mod loader;
+mod framework;
 
-//use mc_render::mcdata::{resource, model, util};
-use mc_render::model::model::Element;
-use mc_render::model::model::TransformedModel;
 
-use std::rc::{Rc};
 
 fn main() {
     println!("Hello, world!");
 
-    let m = std::mem::size_of::<Element<u128>>();
-    let n = std::mem::size_of::<Option<Element<u128>>>();
-    let p = std::mem::size_of::<TransformedModel<u32>>();
-    println!("{} {} {}", m, n, p);
-}
-
-use std::time::Instant;
-struct Timer(Instant);
-
-impl Timer {
-
-    fn start() -> Self {
-        Timer(Instant::now())
+    use std::io::Read;
+    use std::fs::File;
+    use std::convert::TryFrom;
+    let mut ifile = File::open("F:\\data\\RAW\\tmp\\0,0\\key").unwrap();
+    let mut buf = String::new();
+    ifile.read_to_string(&mut buf).unwrap();
+    for line in buf.lines() {
+        let loader::KeyLine { id, name, state } = loader::KeyLine::try_from(line).unwrap();
+        let state: Vec<String> = loader::SplitIter::from(state).map(|s| s.to_string()).collect();
+        println!("[{}] {} {:?}", id, name, state);
     }
 
-    fn stop(&self) {
-        let time = Instant::now() - self.0;
-        println!("use {} us", time.as_micros());
-    }
 }
 
-use std::ptr::NonNull;
-
-pub struct ListNode<T> {
-    value: T,
-    next: Option<NonNull<ListNode<T>>>
-}

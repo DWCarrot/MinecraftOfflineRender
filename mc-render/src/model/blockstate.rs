@@ -1,7 +1,7 @@
 use std::collections::btree_map::BTreeMap as Map;
 use std::collections::btree_map::Values;
 use std::collections::btree_map::ValuesMut;
-
+use std::borrow::Borrow;
 
 /**
  * 
@@ -69,7 +69,12 @@ impl<K: std::cmp::Ord, V> Expression<K, V, usize> {
         (self.keys.len(), self.values.len())
     }
 
-    pub fn get<'a, I:Iterator<Item=&'a K>>(&'a self, key: I, strict: bool) -> Option<&'a V> {
+    pub fn get<'a, Q: 'a, I>(&'a self, key: I, strict: bool) -> Option<&'a V> 
+    where
+        Q: std::cmp::Ord,
+        K: Borrow<Q>,
+        I: Iterator<Item = &'a Q>,
+    {
         if !strict && self.keys.len() == 0 {
             return self.values.get(&0);
         }
@@ -88,7 +93,12 @@ impl<K: std::cmp::Ord, V> Expression<K, V, usize> {
         self.values.get(&m)
     }
 
-    pub fn get_mut<'a, I:Iterator<Item=&'a K>>(&'a mut self, key: I, strict: bool) -> Option<&'a mut V> {
+    pub fn get_mut<'a, Q: 'a, I>(&'a mut self, key: I, strict: bool) -> Option<&'a mut V> 
+    where
+        Q: std::cmp::Ord,
+        K: Borrow<Q>,
+        I: Iterator<Item = &'a Q>,
+    {
         if !strict && self.keys.len() == 0 {
             return self.values.get_mut(&0);
         }
@@ -145,59 +155,111 @@ impl<K: std::cmp::Ord, V> Expression<K, V, usize> {
  */
 
 #[derive(Clone, Debug)]
-pub struct BlockState<K, M> {
-
-    expr: Expression<K, M, usize>,
-
-    group: Vec<usize>
-
-}
-
-impl<K: std::cmp::Ord, M> BlockState<K, M> {
-
-    pub fn new() -> Self {
-        BlockState {
-            expr: Expression::default(),
-            group: Vec::new(),
-        }
-    }
+pub enum BlockState<K, M> {
+    Single(M),
+    Variants(Expression<K, M, usize>),
+    MultiPart(Expression<K, M, usize>, Vec<usize>),
 }
 
 impl<K: std::cmp::Ord, M: Clone> BlockState<K, M> {
 
-    pub fn get<'a, I: Iterator<Item = &'a K>>(&'a self, key: I) -> Vec<M> {
-        let mut m = 0;
-        for k in key {
-            if let Some(n) = self.expr.keys.get(k) {
-                m |= n;
+    pub fn get<'a, Q: 'a + ?Sized, I>(&'a self, key: I) -> Vec<M> 
+    where
+        Q: std::cmp::Ord,
+        K: Borrow<Q>,
+        I: Iterator<Item = &'a Q>,
+    {
+        match self {
+            Self::Single(model) => {
+                vec![model.clone()]
+            }
+            Self::Variants(expr) => {
+                let mut m = 0;
+                for k in key {
+                    if let Some(n) = expr.keys.get(k) {
+                        m |= n;
+                    }
+                }
+                if let Some(model) = expr.values.get(&m) {
+                    vec![model.clone()]
+                } else {
+                    Vec::new()
+                }
+            }
+            Self::MultiPart(expr, group) => {
+                let mut m = 0;
+                for k in key {
+                    if let Some(n) = expr.keys.get(k) {
+                        m |= n;
+                    }
+                }
+                let mut parts = Vec::with_capacity(group.len());
+                for mask in group.iter() {
+                    let n = *mask & m;
+                    if let Some(model) = expr.values.get(&n) {
+                        parts.push(model.clone())
+                    }
+                }
+                parts
             }
         }
-        let mut parts = Vec::with_capacity(self.group.len());
-        for mask in self.group.iter() {
-            let n = *mask & m;
-            if let Some(model) = self.expr.values.get(&n) {
-                parts.push(model.clone())
-            }
-        }
-        parts
+        
     }
 } 
 
 impl<K: std::cmp::Ord + Clone, M> BlockState<K, M> {
 
     pub fn start_group(&mut self) {
-        self.group.push(self.expr.get_initial_link());
+        match self {
+            Self::MultiPart(expr, group) => {
+                group.push(expr.get_initial_link());
+            },
+            _ => {
+                panic!("invalid operation")
+            }
+        }
     }
 
     pub fn insert_group<'a, I:Iterator<Item=&'a K>>(&'a mut self, key: I, value: M) -> Option<usize> {
-        let mut m = self.expr.get_initial_link();
-        for k in key {
-            self.expr.insert_key(k, &mut m)?;
+        match self {
+            Self::MultiPart(expr, group) => {
+                let mut m = expr.get_initial_link();
+                for k in key {
+                    expr.insert_key(k, &mut m)?;
+                }
+                let mask = group.last_mut()?;
+                expr.values.insert(m, value);
+                *mask |= m;
+                Some(m)
+            },
+            Self::Variants(expr) => {
+                let mut m = expr.get_initial_link();
+                for k in key {
+                    expr.insert_key(k, &mut m)?;
+                }
+                expr.values.insert(m, value);
+                Some(m)
+            }
+            Self::Single(model) => {
+                panic!("invalid operation")
+            }
         }
-        let mask = self.group.last_mut()?;
-        self.expr.values.insert(m, value);
-        *mask |= m;
-        Some(m)
+    }
+
+    pub fn try_simplify_variant(self) -> Self {
+        match self {
+            Self::Variants(mut expr) => {
+                if expr.values.len() == 1 {
+                    if let Some(model) = expr.values.remove(&0) {
+                        return Self::Single(model)
+                    }
+                }
+                Self::Variants(expr)
+            },
+            _ => {
+                panic!("invalid operation")
+            }
+        }
     }
 }
 

@@ -29,7 +29,7 @@ impl<R: Read + Seek> AssetsArchive<R> {
         })
     }
 
-    pub fn new_list<I: IntoIterator<Item = R>>(list: I) -> ZipResult<Self> {
+    pub fn from_list<I: IntoIterator<Item = R>>(list: I) -> ZipResult<Self> {
         let mut zips = Vec::new();
         for reader in list.into_iter() {
             zips.push(ZipArchive::new(reader)?);
@@ -70,7 +70,24 @@ impl<R: Read + Seek> AssetsArchive<R> {
         Ok(true)
     }
 
+    pub fn find_blockstates(&mut self) -> Vec<String> {
+        let filter = Scanner::new("assets/minecraft/blockstates/{}.json");
+        let mut res = Vec::new();
+        for zip in self.zips.iter_mut().rev() {
+            for i in 0..zip.len() {
+                let zipfile = zip.by_index(i).unwrap();
+                let name = zipfile.name();
+                let mut args = [name;1];
+                if filter.scan(name, &mut args) == filter.argc() {
+                    res.push(args[0].to_string())
+                }
+            }
+        }
+        res
+    }
 }
+
+
 
 /**
  * 

@@ -24,11 +24,9 @@ use cgmath::Vector2;
 use cgmath::Vector3;
 use cgmath::Matrix4;
 
-use crate::assets::util::Provider;
 use crate::model::BlockRenderer;
 use context::Context;
 use texture::CombinedTexture;
-use texture::CombinedTextureGen;
 use texture::RgbaTexture2d;
 use mesh::MeshVertex;
 use mesh::Mesh;
