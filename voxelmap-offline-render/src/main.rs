@@ -1,22 +1,51 @@
 mod loader;
 mod framework;
 
-
+use clap::{Arg, App};
 
 fn main() {
-    println!("Hello, world!");
+    
+    let matches = App::new("Voxelmap Cache Offline Render")
+        .version("0.1.0")
+        .author("RDCarrot <yyt226univ2017@yahoo.com>")
+        .about("render voxelmap cache data to png")
+        .arg(
+            Arg::with_name("assets")
+                .short("a")
+                .long("assets")
+                .takes_value(true)
+                .help("assets archive; for example: .minecraft/versions/1.15.1/1.15.1.jar")
+        )
+        .arg(
+            Arg::with_name("input-folder")
+                .short("i")
+                .long("input")
+                .takes_value(true)
+                .help("cache data folder")
+        )
+        .arg(
+            Arg::with_name("output-folder")
+                .short("o")
+                .long("output")
+                .takes_value(true)
+                .help("output image folder")
+        ).get_matches();
 
-    use std::io::Read;
-    use std::fs::File;
-    use std::convert::TryFrom;
-    let mut ifile = File::open("F:\\data\\RAW\\tmp\\0,0\\key").unwrap();
-    let mut buf = String::new();
-    ifile.read_to_string(&mut buf).unwrap();
-    for line in buf.lines() {
-        let loader::KeyLine { id, name, state } = loader::KeyLine::try_from(line).unwrap();
-        let state: Vec<String> = loader::SplitIter::from(state).map(|s| s.to_string()).collect();
-        println!("[{}] {} {:?}", id, name, state);
+    let mut options = framework::AppOptions::default();
+
+    if let Some(input) = matches.value_of("input-folder") {
+        options.cache_folder = input.to_string();
     }
+
+    if let Some(output) = matches.value_of("output-folder") {
+        options.output_folder = output.to_string();
+    }
+
+    if let Some(assets) = matches.value_of("assets") {
+        options.assets.push(assets.to_string());
+    }
+
+    framework::app(options).unwrap();
 
 }
 

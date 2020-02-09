@@ -137,7 +137,7 @@ struct SimpleBlock {
     model: Vec<Rc<TransformedModel<CombinedTexture>>>,
 }
 
-impl RenderableBlock for SimpleBlock {
+impl<'a> RenderableBlock<'a> for SimpleBlock {
     type Model = Rc<TransformedModel<CombinedTexture>>;
 
     fn is_air(&self) -> bool {
@@ -152,12 +152,12 @@ impl RenderableBlock for SimpleBlock {
         self.is_water_logged
     }
 
-    fn get_models<'a>(&'a self) -> std::slice::Iter<'a, Self::Model> {
+    fn get_models(&self) -> std::slice::Iter<'a, Self::Model> {
         let last = self.model.len() - 1;
         self.model[0..last].iter()
     }
 
-    fn get_water_models<'a>(&'a self) -> std::slice::Iter<'a, Self::Model> {
+    fn get_water_models(&self) -> std::slice::Iter<'a, Self::Model> {
         let last = self.model.len() - 1;
         self.model[last..].iter()
     }
@@ -180,7 +180,7 @@ struct SimpleWorld {
     water: Rc<TransformedModel<CombinedTexture>>,
 }
 
-impl World for SimpleWorld {
+impl<'a> World<'a> for SimpleWorld {
     type Block = SimpleBlock;
 
     fn get(&self, loc: &Vector3<i32>) -> Self::Block {

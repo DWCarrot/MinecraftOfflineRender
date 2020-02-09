@@ -26,7 +26,7 @@ impl<'a> LayerView<'a> {
     }
 
     pub fn blockstate_id(&self) -> u16 {
-        (self.raw[1] as u16) << 8 + self.raw[2] 
+        ((self.raw[1] as u16) << 8) | (self.raw[2] as u16) 
     }
 
     pub fn light(&self) -> u8 {
@@ -45,15 +45,15 @@ impl<'a> ElementView<'a> {
     }
 
     pub fn seafloor(&self) -> LayerView<'a> {
-        LayerView { raw: &self.raw[5..8] }
+        LayerView { raw: &self.raw[4..8] }
     }
 
     pub fn ceil(&self) -> LayerView<'a> {
-        LayerView { raw: &self.raw[9..12] }
+        LayerView { raw: &self.raw[8..12] }
     }
 
     pub fn vegetation(&self) -> LayerView<'a> {
-        LayerView { raw: &self.raw[13..16] }
+        LayerView { raw: &self.raw[12..16] }
     }
 
     // pub fn _(&self) -> u8 {
@@ -72,7 +72,7 @@ pub struct TileView<'a> {
 impl<'a> TileView<'a> {
 
     pub fn element(&self, x: i32, z: i32) -> ElementView<'a> {
-        let index = (x + z * 256) as usize;
+        let index = ((x + z * 256) * 18) as usize;
         ElementView { raw: &self.raw[index .. index + 18] }
     }
 }
@@ -197,7 +197,7 @@ impl Tile {
         TileView { raw: self.data.as_slice() }
     }
 
-    pub fn get_model<'a>(&'a self, id: u16) -> &'a (Vec<Model>, BlockProps) {
+    pub fn get_model(&self, id: u16) -> &(Vec<Model>, BlockProps) {
         &self.key[(id - 1) as usize]
     }
 }

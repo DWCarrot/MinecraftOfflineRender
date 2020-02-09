@@ -54,12 +54,12 @@ impl<'a, C: Context> OffScreenRenderer<'a, C> {
     pub fn new(ctx: &'a C, textures: &'a Texture2dArray, light_map: &'a Texture2d) -> Self {
         let vert = {
             let mut s = String::new();
-            open_alter(&["src/glrender/opengl-main.vert", "opengl-main.vert"]).unwrap().read_to_string(&mut s).unwrap();
+            open_alter(&["src/glrender/opengl-main.vert", "mc-render/src/glrender/opengl-main.vert", "opengl-main.vert"]).unwrap().read_to_string(&mut s).unwrap();
             s
         };
         let frag = {
             let mut s = String::new();
-            open_alter(&["src/glrender/opengl-main.frag", "opengl-main.frag"]).unwrap().read_to_string(&mut s).unwrap();
+            open_alter(&["src/glrender/opengl-main.frag", "mc-render/src/glrender/opengl-main.frag","opengl-main.frag"]).unwrap().read_to_string(&mut s).unwrap();
             s
         };
         let sourcecode = glium::program::ProgramCreationInput::SourceCode {
@@ -186,17 +186,19 @@ impl BlockRenderer for MeshGenerator {
 
 
 
-pub fn default_lmmp<'a>() -> RawImage2d<'a, u8> {
+pub fn default_lmmp<'a>(light: bool) -> RawImage2d<'a, u8> {
     let w = 16;
     let h = 16;
-    let mut data = vec![0u8; w * h * 3];
-    for x in 0..w {
-        for y in 0..h {
-            let i = (y * w + x) * 3;
-            let g = std::cmp::max(x * 255 / w, y * 255 / h) as u8;
-            data[i + 0] = g;
-            data[i + 1] = g;
-            data[i + 2] = g;
+    let mut data = vec![255u8; w * h * 3];
+    if light {
+        for x in 0..w {
+            for y in 0..h {
+                let i = (y * w + x) * 3;
+                let g = std::cmp::max(x * 255 / w, y * 255 / h) as u8;
+                data[i + 0] = g;
+                data[i + 1] = g;
+                data[i + 2] = g;
+            }
         }
     }
     RawImage2d::from_raw_rgb(data, (w as u32, h as u32))

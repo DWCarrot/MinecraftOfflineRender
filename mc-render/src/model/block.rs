@@ -57,8 +57,8 @@ impl Face {
 }
 
 
-pub trait RenderableBlock {
-    type Model;
+pub trait RenderableBlock<'a> {
+    type Model: 'a;
 
     fn is_air(&self) -> bool;
 
@@ -66,9 +66,9 @@ pub trait RenderableBlock {
 
     fn is_water_logged(&self) -> bool;
 
-    fn get_models<'a>(&'a self) -> SliceIter<'a, Self::Model>;
+    fn get_models(&self) -> SliceIter<'a, Self::Model>;
 
-    fn get_water_models<'a>(&'a self) -> SliceIter<'a, Self::Model>;
+    fn get_water_models(&self) -> SliceIter<'a, Self::Model>;
 
     fn get_inline_color(&self, tintindex: usize) -> [u8; 4] {
         let _ = tintindex;
@@ -80,20 +80,20 @@ pub trait RenderableBlock {
 }
 
 
-pub trait World {
-    type Block: RenderableBlock;
+pub trait World<'a> {
+    type Block: RenderableBlock<'a>;
 
-    fn get(&self, loc: &Vector3<i32>) -> Self::Block;
+    fn get(&'a self, loc: &Vector3<i32>) -> Self::Block;
     
-    fn is_air(&self, loc: &Vector3<i32>) -> bool {
+    fn is_air(&'a self, loc: &Vector3<i32>) -> bool {
         self.get(loc).is_air()
     }
 
-    fn is_water(&self, loc: &Vector3<i32>) -> bool {
+    fn is_water(&'a self, loc: &Vector3<i32>) -> bool {
         self.get(loc).is_water()
     }
 
-    fn is_water_logged(&self, loc: &Vector3<i32>) -> bool {
+    fn is_water_logged(&'a self, loc: &Vector3<i32>) -> bool {
         self.get(loc).is_water_logged()
     }
 

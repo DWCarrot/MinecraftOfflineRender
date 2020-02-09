@@ -254,7 +254,7 @@ fn test_glbaserender() {
         MeshVertex { loc: [0, 0, -1], pos: tr.into(), tex: [16.0, 16.0], tex_id: 4, color: [ 69, 173, 242, 255], light: 0xFF },
     ]);
 
-    let lmmp = glium::texture::Texture2d::new(ctx.facade(), glrender::default_lmmp()).unwrap();
+    let lmmp = glium::texture::Texture2d::new(ctx.facade(), glrender::default_lmmp(false)).unwrap();
     let mut r = glrender::OffScreenRenderer::new(&ctx, &tex, &lmmp);
 
 

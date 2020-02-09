@@ -44,15 +44,15 @@ pub trait BlockRenderer {
 
 }
 
-pub fn draw<T, E, B> (
+pub fn draw<'a, T, E, B> (
     faces: &[Face],
     loc: &Vector3<i32>, 
     renderer: &mut dyn BlockRenderer<Texture = T,E = E>, 
-    world: &dyn World<Block = B>
+    world: &'a dyn World<'a, Block = B>
 ) -> Result<(), E>
 where
-    T: Clone,
-    B: RenderableBlock<Model = RefModel<T>>,
+    T: Clone + 'a,
+    B: RenderableBlock<'a, Model = RefModel<T>>,
 {
     
     let draw_model = |tmodel: &RefModel<T>, block: &B, renderer: &mut dyn BlockRenderer<Texture=T,E=E>| -> Result<(), E> {
@@ -96,6 +96,9 @@ where
     };
 
     let block = world.get(loc);
+    if block.is_air() {
+        return Ok(());
+    }
     if block.is_water() || block.is_water_logged() {
         renderer.state(2);
         for tmodel in block.get_water_models() {
