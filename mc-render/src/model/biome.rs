@@ -1,5 +1,4 @@
 use image::RgbImage;
-use image::ImageFormat;
 use image::DynamicImage;
 
 use crate::assets::biome::BIOME_DATA;
@@ -92,9 +91,9 @@ impl BiomeColor {
     pub fn get_grass(&self, biome: &Biome, height: i32) -> [u8; 3] {
         let biome_color = || -> [u8; 3] {
             let BiomeProps { temperature, rainfall } = BiomeColor::get(&self.biomes, biome).1.adjust(height);
-            let w = self.grass.width() as f32;
-            let h = self.grass.height() as f32;
-            let x = (temperature * w).round() as u32;
+            let w = (self.grass.width() - 1) as f32;
+            let h = (self.grass.height() - 1) as f32;
+            let x = ((1.0 - temperature) * w).round() as u32;
             let y = ((1.0 - rainfall) * h).round() as u32;
             let c = self.grass.get_pixel(x, y);
             c.0.clone()
@@ -123,9 +122,9 @@ impl BiomeColor {
     pub fn get_foliage(&self, biome: &Biome, height: i32) -> [u8; 3] {
         let biome_color = || -> [u8; 3] {
             let BiomeProps { temperature, rainfall } = BiomeColor::get(&self.biomes, biome).1.adjust(height);
-            let w = self.grass.width() as f32;
-            let h = self.grass.height() as f32;
-            let x = (temperature * w).round() as u32;
+            let w = (self.foliage.width() - 1) as f32;
+            let h = (self.foliage.height() - 1) as f32;
+            let x = ((1.0 - temperature) * w).round() as u32;
             let y = ((1.0 - rainfall) * h).round() as u32;
             let c = self.foliage.get_pixel(x, y);
             c.0.clone()

@@ -34,12 +34,18 @@
             "program": "${workspaceFolder}/target/debug/voxelmap-offline-render.exe",
             "args": [
                 "-a", "F:\\Game\\Minecraft\\.minecraft\\versions\\1.15.1\\1.15.1.jar",
-                "-i", "F:\\Game\\Minecraft\\.minecraft\\versions\\1.15.1-fabric-loader-0.7.2+build.175\\mods\\mamiyaotaru\\voxelmap\\cache\\New World\\overworld",
-                "-o", "target/images"
+                "-i", "F:\\Game\\Minecraft\\.minecraft\\versions\\1.15.1-fabric-loader-0.7.2+build.175\\mods\\mamiyaotaru\\voxelmap\\cache\\play.nyaacat.com\\nyaa\\overworld",
+                "-o", "target/images",
+                "-s", "1"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
-            "environment": [],
+            "environment": [
+                {
+                    "name": "CTX_VISIBLE",
+                    "value": "1"
+                }
+            ],
             "externalConsole": false
         }
     ]

@@ -18,6 +18,6 @@ void main() {
     v_color = vec4((color << 24) >> 24, (color << 16) >> 24, (color << 8) >> 24, (color << 0) >> 24) / 255.0;
     v_tex = vec3(tex / 16.0, tex_id);
     v_light = vec2((light << 28) >> 28, (light << 24) >> 28) / 16.0;
-    vec3 position = pos / 16.0 + vec3(loc - center);
-    gl_Position =  world * vec4(position, 1.0);
+    vec3 position = pos + vec3((loc - center) * 16);
+    gl_Position =  world * vec4(position  / 16.0, 1.0);
 }

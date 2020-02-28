@@ -75,7 +75,7 @@ impl<'a, C: Context> OffScreenRenderer<'a, C> {
         let shader = Program::new(ctx.facade(), sourcecode).unwrap();
         OffScreenRenderer {
             ctx,
-            sampled_textures: textures.sampled().minify_filter(MinifySamplerFilter::NearestMipmapNearest).magnify_filter(MagnifySamplerFilter::Nearest),
+            sampled_textures: textures.sampled().minify_filter(MinifySamplerFilter::Nearest).magnify_filter(MagnifySamplerFilter::Nearest),
             sampled_light_map: light_map.sampled(),
             shader,
             draw_params: DrawParameters {

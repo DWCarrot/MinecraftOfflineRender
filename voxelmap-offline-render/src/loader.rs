@@ -92,8 +92,13 @@ impl From<&str> for InnerColor {
         match value {
             "minecraft:water" => Self::Water,
             "minecraft:grass_block" => Self::Grass,
-            //"minecraft:foliage" => Self::Water,
-            _ => Self::None,
+            "minecraft:lily_pad" => Self::Grass,
+            _ => {
+                if value.ends_with("leaves") {
+                    return Self::Foliage;
+                }
+                Self::None
+            }
         }
     }
 }
@@ -102,7 +107,7 @@ impl InnerColor {
 
     pub fn get_inner_color(&self, biome_color_gen: &BiomeColor, biome: u8, height: u8) -> [u8; 3] {
         match self {
-            Self::None => [0, 0, 0],
+            Self::None => [255, 255, 255],
             Self::Water => biome_color_gen.get_water(&Biome(biome as usize)),
             Self::Grass => biome_color_gen.get_grass(&Biome(biome as usize), height as i32),
             Self::Foliage => biome_color_gen.get_foliage(&Biome(biome as usize), height as i32),
@@ -178,7 +183,9 @@ impl Tile {
         for line in key_string.lines() {
             match KeyLine::try_from(line) {
                 Ok(k) => {
-                    key.push((pvd.get(k.name, SplitIter::from(k.state)), BlockProps::new_from(k.name, SplitIter::from(k.state))));
+                    let model = pvd.get(k.name, SplitIter::from(k.state));
+                    let props = BlockProps::new_from(k.name, SplitIter::from(k.state));
+                    key.push((model, props));
                 },
                 Err(e) => {
                     eprintln!("parse error: `{}` @{}", line, e); //TODO: log

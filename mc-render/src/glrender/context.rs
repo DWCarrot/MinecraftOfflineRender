@@ -79,12 +79,13 @@ pub trait Context {
 pub struct WindowHideContext {
     display: Display,
     event_loop: EventsLoop,
+    visibility: bool,
 }
 
 impl WindowHideContext {
 
     pub fn wait(&mut self) {
-        let mut working = true;
+        let mut working = self.visibility;
         let itv = std::time::Duration::from_millis(1);
         while working {
             self.event_loop.poll_events(|e| {
@@ -125,6 +126,7 @@ impl Context for WindowHideContext {
     }
 
     fn build(width: u32, height: u32, version: GlRequest) -> Self {
+        let visibility = std::env::var("CTX_VISIBLE").is_ok();
         let event_loop = EventsLoop::new();
         let dpi = {
             let w = glutin::WindowBuilder::new()
@@ -134,7 +136,7 @@ impl Context for WindowHideContext {
             w.get_hidpi_factor()
         };
         let wb = glutin::WindowBuilder::new()
-            .with_visibility(true)
+            .with_visibility(visibility)
             .with_dimensions(glutin::dpi::PhysicalSize::from((width, height)).to_logical(dpi));
         let cb = glutin::ContextBuilder::new()
             .with_pixel_format(24, 8)
@@ -144,7 +146,8 @@ impl Context for WindowHideContext {
         let display = Display::new(wb, cb, &event_loop).unwrap();
         WindowHideContext {
             display,
-            event_loop
+            event_loop,
+            visibility
         }
     }
 

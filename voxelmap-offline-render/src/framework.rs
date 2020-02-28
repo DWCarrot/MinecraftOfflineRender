@@ -22,6 +22,8 @@ use mc_render::model::block::RenderableBlock;
 use mc_render::model::block::World;
 use mc_render::model::biome::BiomeColor;
 use mc_render::glrender::MeshGenerator;
+use mc_render::glrender::mesh::Mesh;
+use mc_render::glrender::mesh::MeshVertex;
 use mc_render::glrender::context::Context;
 use mc_render::glrender::context::WindowHideContext;
 use mc_render::glrender;
@@ -49,40 +51,47 @@ impl<'a> TileWorld<'a> {
         }
     }
 
-    pub fn draw(&'a self) -> MeshGenerator {
+    pub fn draw(&'a self) -> Vec<Mesh<MeshVertex>> {
         let faces = [Face::Up];
-        let mut r = MeshGenerator::new();
-        let view = self.tile.view();
-        for x in 0 .. 256 {
-            for z in 0 .. 256 {
-                let element = view.element(x, z);
-                let block = element.seafloor();
-                if block.blockstate_id() != 0 {
-                    let loc = Vector3::new(x, block.height() as i32, z);
-                    model::draw(&faces, &loc, &mut r, self).unwrap();
+        let mut res = Vec::new();
+        for tz in 0 .. 8 {
+            for tx in 0 .. 8 {
+                let mut r = MeshGenerator::new();
+                let view = self.tile.view();
+                for z in 0 + tz * 32 .. 32 + tz * 32 {
+                    for x in 0 + tx * 32 .. 32 + tx * 32 {
+                        let element = view.element(x, z); 
+                        let block = element.seafloor();
+                        if block.blockstate_id() != 0 {
+                            let loc = Vector3::new(x, block.height() as i32, z);
+                            model::draw(&faces, &loc, &mut r, self).unwrap();
+                        }
+                        let block = element.shading();
+                        if block.blockstate_id() != 0 {
+                            let loc = Vector3::new(x, block.height() as i32, z);
+                            model::draw(&faces, &loc, &mut r, self).unwrap();
+                        }
+                        let block = element.ceil();
+                        if block.blockstate_id() != 0 {
+                            let loc = Vector3::new(x, block.height() as i32, z);
+                            model::draw(&faces, &loc, &mut r, self).unwrap();
+                        }
+                        let block = element.vegetation();
+                        if block.blockstate_id() != 0 {
+                            let loc = Vector3::new(x, block.height() as i32, z);
+                            model::draw(&faces, &loc, &mut r, self).unwrap();
+                        }
+                    }
                 }
-                let block = element.ceil();
-                if block.blockstate_id() != 0 {
-                    let loc = Vector3::new(x, block.height() as i32, z);
-                    model::draw(&faces, &loc, &mut r, self).unwrap();
-                }
-                let block = element.vegetation();
-                if block.blockstate_id() != 0 {
-                    let loc = Vector3::new(x, block.height() as i32, z);
-                    model::draw(&faces, &loc, &mut r, self).unwrap();
-                }
-                let block = element.shading();
-                if block.blockstate_id() != 0 {
-                    let loc = Vector3::new(x, block.height() as i32, z);
-                    model::draw(&faces, &loc, &mut r, self).unwrap();
-                }
+                res.extend(r.unwrap())
             }
         }
-        r
+        res
     }
 
     fn gen(&'a self, block: LayerView<'a>, element: ElementView<'a>) -> TileBlock<'a> {
-        let (model, props) = self.tile.get_model(block.blockstate_id());
+        let id = block.blockstate_id();
+        let (model, props) = self.tile.get_model(id);
         TileBlock {
             model: model.as_slice(),
             water: self.water_models.as_slice(),
@@ -130,7 +139,7 @@ impl<'a> World<'a> for TileWorld<'a> {
     }
     
     fn is_air(&self, loc: &Vector3<i32>) -> bool {
-        if loc.x < 0 || loc.y < 0 || loc.z < 0 || loc.x > 255 || loc.y > 255 || loc.z > 255 {
+        if !(loc.x < 0 || loc.y < 0 || loc.z < 0 || loc.x > 255 || loc.y > 255 || loc.z > 255) {
             let element = self.tile.view().element(loc.x, loc.z);
             let block = element.ceil();
             if block.height() as i32 == loc.y && block.blockstate_id() != 0 {
@@ -221,8 +230,8 @@ impl Default for AppOptions {
             assets: Vec::new(),
             cache_folder: String::from("."),
             output_folder: String::from("../image"),
-            world: Matrix4::from_angle_y(cgmath::Deg(90.0)) * Matrix4::from_scale(1.0 / 128.0),
-            center: Vector3::new(128, 128, 128),
+            world: Matrix4::from_angle_x(cgmath::Deg(90.0)) * Matrix4::from_scale(1.0 / 128.0),
+            center: Vector3::new(128, 0, 128),
             night_mod: false,
         }
     }
@@ -263,7 +272,7 @@ pub fn app(options: AppOptions) -> GEResult<()> {
     let mut tex_gen = CombinedTextureGen::new(ctx.facade(), tex_pvd);
     let mut modelpvd = ModelProvider::new();
     modelpvd.build("minecraft", list.into_iter(), &mut bs_pvd, &mut mdl_pvd, &mut tex_gen);
-    let textures = tex_gen.build(options.tex_width, options.tex_height, MipmapsOption::AutoGeneratedMipmaps)?;
+    let textures = tex_gen.build(options.tex_width, options.tex_height, MipmapsOption::NoMipmap)?;
     let light_map = glium::texture::Texture2d::new(ctx.facade(), glrender::default_lmmp(options.night_mod)).unwrap();
     let mut renderer = OffScreenRenderer::new(&ctx, &textures, &light_map);
     let biome_color_gen = BiomeColor::new();
@@ -274,7 +283,7 @@ pub fn app(options: AppOptions) -> GEResult<()> {
             println!("path {}", path.display());
             let world = TileWorld::new(File::open(&path).map_err(Box::new)?, id, &modelpvd, &biome_color_gen);
             let mesh = world.draw();
-            let img = renderer.draw(mesh.unwrap().iter(), options.world, options.center)?;
+            let img = renderer.draw(mesh.iter(), options.world, options.center)?;
             let mut path = PathBuf::from(options.output_folder.as_str());
             path.push(format!("{},{}.png", id.0, id.1));
             if let Err(e) = img.save_with_format(&path, image::ImageFormat::PNG) {
